@@ -75,6 +75,10 @@ type FileSystem struct {
 
 	WalkAndZipErr       []error
 	walkAndZipCallCount int
+
+	SeekResp      []int64
+	SeekErr       []error
+	seekCallCount int
 }
 
 // MkdirAll is a fake implementation for unit testing.
@@ -193,4 +197,10 @@ func (fi FileInfo) IsDir() bool {
 // Sys is a fake implementation for unit testing.
 func (fi FileInfo) Sys() any {
 	return fi.FakeSYS
+}
+
+// Seek is a fake implementation for unit testing.
+func (f *FileSystem) Seek(*os.File, int64, int) (int64, error) {
+	defer func() { f.seekCallCount++ }()
+	return f.SeekResp[f.seekCallCount], f.SeekErr[f.seekCallCount]
 }
