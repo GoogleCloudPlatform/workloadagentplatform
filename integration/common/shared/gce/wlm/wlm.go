@@ -59,9 +59,15 @@ func NewWLMClient(ctx context.Context, basePath string) (*WLM, error) {
 
 // WriteInsight wraps a call to the WLM insights:write API.
 func (w *WLM) WriteInsight(project string, location string, writeInsightRequest *dwpb.WriteInsightRequest) error {
+	_, err := w.WriteInsightAndGetResponse(project, location, writeInsightRequest)
+	return err
+}
+
+// WriteInsightAndGetResponse wraps a call to the WLM insights:write API.
+func (w *WLM) WriteInsightAndGetResponse(project string, location string, writeInsightRequest *dwpb.WriteInsightRequest) (*WriteInsightResponse, error) {
 	res, err := w.Service.WriteInsight(project, location, writeInsightRequest)
 	log.Logger.Debugw("WriteInsight response", "res", res, "err", err)
-	return err
+	return res, err
 }
 
 // DataWarehouseService implements the Data Warehouse service.

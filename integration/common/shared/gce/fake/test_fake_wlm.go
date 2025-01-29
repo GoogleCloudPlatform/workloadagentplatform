@@ -22,6 +22,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/protobuf/testing/protocmp"
+	"github.com/GoogleCloudPlatform/workloadagentplatform/integration/common/shared/gce/wlm/wlm"
 	dwpb "github.com/GoogleCloudPlatform/workloadagentplatform/integration/common/shared/protos/datawarehouse"
 	syspb "github.com/GoogleCloudPlatform/workloadagentplatform/integration/common/shared/protos/system"
 )
@@ -48,6 +49,7 @@ type TestWLM struct {
 	WriteInsightArgs      []WriteInsightArgs
 	WriteInsightErrs      []error
 	WriteInsightCallCount int
+	WriteInsightResponses []*wlm.WriteInsightResponse
 }
 
 func validationDetailSort(a, b *dwpb.SapValidation_ValidationDetail) bool {
@@ -65,4 +67,17 @@ func (w *TestWLM) WriteInsight(project, location string, req *dwpb.WriteInsightR
 	}
 
 	return w.WriteInsightErrs[w.WriteInsightCallCount]
+}
+
+// WriteInsightAndGetResponse is a fake implementation of the gce.WLM.WriteInsightAndGetResponse call.
+func (w *TestWLM) WriteInsightAndGetResponse(project, location string, req *dwpb.WriteInsightRequest) (*wlm.WriteInsightResponse, error) {
+	defer func() { w.WriteInsightCallCount++ }()
+
+	if w.WriteInsightCallCount < len(w.WriteInsightArgs) {
+		if diff := cmp.Diff(w.WriteInsightArgs[w.WriteInsightCallCount], WriteInsightArgs{project, location, req}, insightArgsDiffOpts...); diff != "" {
+			w.T.Errorf("WriteInsightAndGetResponse() arguments diff (-want +got):\n%s", diff)
+		}
+	}
+
+	return w.WriteInsightResponses[w.WriteInsightCallCount], w.WriteInsightErrs[w.WriteInsightCallCount]
 }
