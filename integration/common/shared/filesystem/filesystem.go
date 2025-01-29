@@ -45,6 +45,7 @@ type (
 		Chmod(string, os.FileMode) error
 		Stat(string) (os.FileInfo, error)
 		WalkAndZip(string, zipper.Zipper, *zip.Writer) error
+		Seek(*os.File, int64, int) (int64, error)
 	}
 )
 
@@ -149,4 +150,9 @@ func (h Helper) WalkAndZip(source string, z zipper.Zipper, w *zip.Writer) error 
 		_, err = h.Copy(headerWriter, f)
 		return err
 	})
+}
+
+// Seek provides testable implementation of os.Seek method.
+func (h Helper) Seek(file *os.File, offset int64, whence int) (int64, error) {
+	return file.Seek(offset, whence)
 }

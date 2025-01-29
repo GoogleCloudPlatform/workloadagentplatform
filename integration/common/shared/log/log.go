@@ -217,7 +217,13 @@ func SetupLoggingForTest() {
 // SetupLoggingForOTE creates logging config for the agent's one time execution.
 func SetupLoggingForOTE(agentName, command string, params Parameters) Parameters {
 	params.CloudLogName = fmt.Sprintf("%s-%s", agentName, command)
+	if params.LogFileName == "" {
+		params.LogFileName = OTEFilePath(agentName, command, params.OSType, params.LogFilePath)
+	}
+	fmt.Println("log file name: ", params.LogFileName)
+	os.Chmod(params.LogFileName, 0660)
 	SetupLogging(params)
+	os.Chmod(params.LogFileName, 0660)
 	return params
 }
 
