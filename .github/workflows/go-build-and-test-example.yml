@@ -34,7 +34,6 @@ jobs:
         export PATH=${PATH}:`go env GOPATH`/bin
         protoc --go_opt=paths=source_relative integration/common/protos/*.proto --go_out=.
         protoc --go_opt=paths=source_relative integration/example/protos/*.proto --go_out=.
-        protoc --go_opt=paths=source_relative integration/common/shared/protos/**/*.proto --go_out=.
         protoc --go_opt=paths=source_relative sharedprotos/**/*.proto --go_out=.
 
     - name: Get the latest dependency versions
