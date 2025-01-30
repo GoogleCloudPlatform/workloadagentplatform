@@ -183,6 +183,17 @@ message SapDiscovery {
 
       // Instance is part of a DR site.
       bool is_dr_site = 6;
+
+      // Disk mount on the instance.
+      message DiskMount {
+        // Name of the disk.
+        string name = 1;
+        // Filesystem mount point.
+        string mount_point = 2;
+      }
+
+      // Disk mounts on the instance.
+      repeated DiskMount disk_mounts = 7;
     }
 
     // A set of properties only applying to instance type resources.
