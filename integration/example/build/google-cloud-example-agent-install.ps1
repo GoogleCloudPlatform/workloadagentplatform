@@ -14,7 +14,13 @@ $INSTALL_DIR = 'C:\Program Files\Google\google-cloud-example-agent'
 $SVC_NAME = 'google-cloud-example-agent'
 $BIN_NAME_EXE = 'google-cloud-example-agent.exe'
 $MONITOR_TASK = 'google-cloud-example-agent-monitor'
-$LOGS_DIR = "$INSTALL_DIR\logs"
+if ($env:ProgramData -eq $null -or $env:ProgramData -eq '') {
+  $DATA_DIR = 'C:\Program Files\Google\google-cloud-example-agent'
+}
+else {
+  $DATA_DIR = $env:ProgramData + '\Google\google-cloud-example-agent'
+}
+$LOGS_DIR = "$DATA_DIR\logs"
 $CONF_DIR = "$INSTALL_DIR\conf"
 $LOG_FILE ="$LOGS_DIR\google-cloud-example-agent-install.log"
 
@@ -76,7 +82,8 @@ function ConfigureAgentWindows-Service {
   # Remove any existing service
   if ($(Get-Service -Name $SVC_NAME -ErrorAction SilentlyContinue).Length -gt 0) {
     Stop-Service $SVC_NAME
-    Remove-CimInstance -InputObject $(Get-CimInstance -ClassName Win32_Service -Filter "Name='google-cloud-example-agent'")
+    $service = Get-CimInstance -ClassName Win32_Service -Filter "Name='google-cloud-example-agent'"
+    $service.Dispose()
     # without the ampersand PowerShell will block removal of the service for some time.
     & sc.exe delete $SVC_NAME
   }

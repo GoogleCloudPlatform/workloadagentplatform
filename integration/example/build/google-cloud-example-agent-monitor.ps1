@@ -1,7 +1,13 @@
 
 $ErrorActionPreference = 'Stop'
 $INSTALL_DIR = 'C:\Program Files\Google\google-cloud-example-agent'
-$LOGS_DIR = "$INSTALL_DIR\logs"
+if ($env:ProgramData -eq $null -or $env:ProgramData -eq '') {
+  $DATA_DIR = 'C:\Program Files\Google\google-cloud-example-agent'
+}
+else {
+  $DATA_DIR = $env:ProgramData + '\Google\google-cloud-example-agent'
+}
+$LOGS_DIR = "$DATA_DIR\logs"
 $LOG_FILE ="$LOGS_DIR\google-cloud-example-agent-monitor.log"
 $SVC_NAME = 'google-cloud-example-agent'
 

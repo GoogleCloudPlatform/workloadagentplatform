@@ -22,7 +22,7 @@ replace github.com/GoogleCloudPlatform/workloadagentplatform/integration/common/
 
 require (
   github.com/GoogleCloudPlatform/workloadagentplatform/integration/common v0.0.0
-  github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries v0.0.0-20250206170227-f24f60073850
+  github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries v0.0.0-20250206221940-bfad91c9de36
   github.com/spf13/cobra v1.8.1
   github.com/spf13/pflag v1.0.5
   go.uber.org/zap v1.27.0

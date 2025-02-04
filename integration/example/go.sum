@@ -14,8 +14,8 @@ cloud.google.com/go/longrunning v0.6.4 h1:3tyw9rO3E2XVXzSApn1gyEEnH2K9SynNQjMlBi
 cloud.google.com/go/longrunning v0.6.4/go.mod h1:ttZpLCe6e7EXvn9OxpBRx7kZEB0efv8yBO6YnVMfhJs=
 github.com/BurntSushi/toml v0.3.1 h1:WXkYYl6Yr3qBf1K79EBnL4mak0OimBfB0XUf9Vl28OQ=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
-github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries v0.0.0-20250206170227-f24f60073850 h1:PkgZPItj/ANnCyBDTXSEnwvrv8jE/RavfFlpW2o8m08=
-github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries v0.0.0-20250206170227-f24f60073850/go.mod h1:Ey+Ah6Z12hHLT+gXXS1exogXp454BkCPvZMq/w31nOE=
+github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries v0.0.0-20250206221940-bfad91c9de36 h1:jtqgyf7G0W1AL3cAwXpgLbaVsgfpGI4UjY5C8WYm2Cc=
+github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries v0.0.0-20250206221940-bfad91c9de36/go.mod h1:Ey+Ah6Z12hHLT+gXXS1exogXp454BkCPvZMq/w31nOE=
 github.com/cenkalti/backoff/v4 v4.3.0 h1:MyRJ/UdXutAwSAT+s3wNd7MfTIcy71VQueUuFK343L8=
 github.com/cenkalti/backoff/v4 v4.3.0/go.mod h1:Y3VNntkOUPxTVeUxJ/G5vcM//AlwfmyYozVcomhLiZE=
 github.com/cpuguy83/go-md2man/v2 v2.0.4/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
