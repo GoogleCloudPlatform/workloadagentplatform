@@ -28,6 +28,7 @@ import (
 	cpb "google.golang.org/genproto/googleapis/monitoring/v3"
 	mrpb "google.golang.org/genproto/googleapis/monitoring/v3"
 	tpb "google.golang.org/protobuf/types/known/timestamppb"
+	"github.com/GoogleCloudPlatform/workloadagentplatform/integration/common/shared/gce/metadataserver"
 	"github.com/GoogleCloudPlatform/workloadagentplatform/integration/common/shared/log"
 )
 
@@ -53,12 +54,12 @@ var (
 		"namespace":  "test-bms",
 		"node_id":    "test-bms",
 	}
-	defaultCloudProperties = &CloudProperties{
+	defaultCloudProperties = &metadataserver.CloudProperties{
 		ProjectID:  "test-project",
 		Zone:       "test-zone",
 		InstanceID: "123456",
 	}
-	bmsCloudProperties = &CloudProperties{
+	bmsCloudProperties = &metadataserver.CloudProperties{
 		ProjectID:    "test-project",
 		Region:       "test-location",
 		InstanceName: "test-bms",
@@ -184,7 +185,7 @@ func TestBuildFloat64(t *testing.T) {
 func TestMonitoredResource(t *testing.T) {
 	tests := []struct {
 		name       string
-		cloudProps *CloudProperties
+		cloudProps *metadataserver.CloudProperties
 		bareMetal  bool
 		want       *mrespb.MonitoredResource
 	}{

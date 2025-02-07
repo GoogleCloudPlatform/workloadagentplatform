@@ -28,9 +28,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/GoogleCloudPlatform/workloadagentplatform/integration/common"
+	"github.com/GoogleCloudPlatform/workloadagentplatform/integration/common/usagemetrics"
 	"github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries/log"
 	"github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries/recovery"
-	"github.com/GoogleCloudPlatform/workloadagentplatform/integration/common/usagemetrics"
 
 	cpb "github.com/GoogleCloudPlatform/workloadagentplatform/integration/common/protos"
 	epb "github.com/GoogleCloudPlatform/workloadagentplatform/integration/example/protos"
@@ -101,7 +101,7 @@ func (d *Daemon) Execute(ctx context.Context) error {
 	d.lp.CloudLogName = d.Integration.GetAgentName()
 	d.lp.LogFileName = fmt.Sprintf("/var/log/%s.log", d.Integration.GetAgentName())
 	if d.lp.OSType == "windows" {
-		d.lp.LogFileName = fmt.Sprintf("C:\\Program Files\\Google\\%s\\logs\\%s.log", d.Integration.GetAgentName(), d.Integration.GetAgentName())
+		d.lp.LogFileName = fmt.Sprintf(`%s\Google\%s\logs\%s.log`, log.CreateWindowsLogBasePath(), d.Integration.GetAgentName(), d.Integration.GetAgentName())
 	}
 	log.SetupLogging(d.lp)
 

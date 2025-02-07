@@ -10,6 +10,7 @@
   .
 #>
 $ErrorActionPreference = 'Stop'
+$DATA_DIR = $env:ProgramData + '\Google\google-cloud-example-agent'
 $INSTALL_DIR = 'C:\Program Files\Google\google-cloud-example-agent'
 $SVC_NAME = 'google-cloud-example-agent'
 $MONITOR_TASK = 'google-cloud-example-agent-monitor'
@@ -22,7 +23,8 @@ try {
   }
   if ($(Get-Service -Name $SVC_NAME -ErrorAction SilentlyContinue).Length -gt 0) {
     Stop-Service $SVC_NAME
-    Remove-CimInstance -InputObject $(Get-CimInstance -ClassName Win32_Service -Filter "Name='google-cloud-example-agent'")
+    $service = Get-CimInstance -ClassName Win32_Service -Filter "Name='google-cloud-example-agent'"
+    $service.Dispose()
     # without the ampersand PowerShell will block removal of the service for some time.
     & sc.exe delete $SVC_NAME
   }
@@ -30,6 +32,9 @@ try {
   # remove the agent directory
   if (Test-Path $INSTALL_DIR) {
     Remove-Item -Recurse -Force $INSTALL_DIR
+  }
+  if (!($env:ProgramData -eq $null) -and !($env:ProgramData -eq '')) {
+    Remove-Item -Recurse -Force $DATA_DIR
   }
 }
 catch {

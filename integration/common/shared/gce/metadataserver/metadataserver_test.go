@@ -256,6 +256,7 @@ func TestReadCloudPropertiesWithRetry(t *testing.T) {
 				InstanceName:     "test-instance-name",
 				Image:            "test-image",
 				MachineType:      "test-machine-type",
+				Region:           "test-zone",
 				Scopes:           []string{"scope1", "scope2"},
 			},
 		},
@@ -279,6 +280,7 @@ func TestReadCloudPropertiesWithRetry(t *testing.T) {
 				InstanceName:     "test-instance-name",
 				Image:            ImageUnknown,
 				MachineType:      MachineTypeUnknown,
+				Region:           "test-zone",
 			},
 		},
 	}
@@ -360,6 +362,7 @@ func TestFetchCloudProperties(t *testing.T) {
 		InstanceName:     "test-instance-name",
 		Image:            "test-image",
 		MachineType:      "test-machine-type",
+		Region:           "test-zone",
 		Scopes:           []string{"scope1", "scope2"},
 	}
 
