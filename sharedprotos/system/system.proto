@@ -194,6 +194,20 @@ message SapDiscovery {
 
       // Disk mounts on the instance.
       repeated DiskMount disk_mounts = 7;
+
+      // Disk device name on the instance.
+      // This message is only used in local discovery.
+      message DiskDeviceName {
+        // Source of the disk.
+        string source = 1;
+        // Device name of the disk.
+        string device_name = 2;
+      }
+
+      // Disk device names on the instance.
+      // This field is only used in local discovery, and should be removed
+      // before sending to DW.
+      repeated DiskDeviceName disk_device_names = 8;
     }
 
     // A set of properties only applying to instance type resources.
