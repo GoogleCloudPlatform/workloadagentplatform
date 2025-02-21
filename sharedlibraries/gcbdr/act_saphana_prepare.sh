@@ -18,13 +18,12 @@
 set -x
 DBSID=$1
 userstorekey=$2
+HANAVERSION=$3
 
-#DBSID=PDS
-#userstorekey=TEST
-#HANAVERSION=200053
 
 tdate=`date +%Y%m%d%H%M%S`
-FILELOC="/act/touch/"
+BASEPATH="/etc/google-cloud-sap-agent/gcbdr"
+FILELOC="$BASEPATH/touch"
 if [ ! -d "$FILELOC" ]; then
    mkdir -p $FILELOC
    chmod 755 $FILELOC
@@ -32,36 +31,23 @@ else
    chmod 755 $FILELOC
 fi
 DBSID=`echo $DBSID | tr '[a-z]' '[A-Z]'`
-FILE_NAME=$FILELOC/hanabackupdblist.log
-BACKUP_XML=$FILELOC/backupstatus.xml
 DBADM=`echo $DBSID | tr '[A-Z]' '[a-z]'`
 DBADM=$DBADM'adm'
 dbuser=$DBADM
-if [ ! -d /act/touch/FAIL_MSG ]; then
-   mkdir -p /act/touch/FAIL_MSG
-   chown "$DBADM":sapsys /act/touch/FAIL_MSG
+if [ ! -d $FILELOC/FAIL_MSG ]; then
+   mkdir -p $FILELOC/FAIL_MSG
+   chown "$DBADM":sapsys $FILELOC/FAIL_MSG
 else
-   rm -f /act/touch/FAIL_MSG/*
-   chown "$DBADM":sapsys /act/touch/FAIL_MSG
-fi
-if [ ! -f "$FILE_NAME" ]; then
-   touch $FILE_NAME
-   chown "$DBADM":sapsys $FILE_NAME
-   chmod 755 $FILE_NAME
+   rm -f $FILELOC/FAIL_MSG/*
+   chown "$DBADM":sapsys $FILELOC/FAIL_MSG
 fi
 
-if [ ! -f "$BACKUP_XML" ]; then
-   touch $BACKUP_XML
-   chown "$DBADM":sapsys $BACKUP_XML
-   chmod 755 $BACKUP_XML
-fi
-
-FAIL_MSG=/act/touch/FAIL_MSG
-source /act/custom_apps/act_saphana_comm_func.sh
+FAIL_MSG=$FILELOC/FAIL_MSG
+source $BASEPATH/act_saphana_comm_func.sh
 globalpath=`su - $dbuser -c 'echo $DIR_INSTANCE'`
 globalpath=`dirname $globalpath`
 
-SSLENFORCE=`grep "sslenforce" $globalpath/SYS/global/hdb/custom/config/global.ini`
+SSLENFORCE=`grep "^sslenforce" $globalpath/SYS/global/hdb/custom/config/global.ini`
 SSLENFORCE=`echo $SSLENFORCE | awk -F "=" '{print $2}'|xargs`
 SSLENFORCE=`echo $SSLENFORCE | tr '[A-Z]' '[a-z]'`
 
@@ -125,13 +111,14 @@ backup_backint_check "$userstorekey"
 
 ####################################### Check DATA, LOG, LOGBACKUPATH FS Usage ############################
 
-DATAPATH=`cat $globalpath/SYS/global/hdb/custom/config/global.ini | grep "basepath_datavolumes" | awk -F"=" '{print $2}' |xargs`
-LOGPATH=`cat $globalpath/SYS/global/hdb/custom/config/global.ini | grep "basepath_logvolumes" | awk -F"=" '{print $2}' |xargs`
-LOGBKPPATH=`cat $globalpath/SYS/global/hdb/custom/config/global.ini | grep "basepath_logbackup" | awk -F"=" '{print $2}' |xargs`
+DATAPATH=`cat $globalpath/SYS/global/hdb/custom/config/global.ini | grep "^basepath_datavolumes" | awk -F"=" '{print $2}' |xargs`
+LOGPATH=`cat $globalpath/SYS/global/hdb/custom/config/global.ini | grep "^basepath_logvolumes" | awk -F"=" '{print $2}' |xargs`
+LOGBKPPATH=`cat $globalpath/SYS/global/hdb/custom/config/global.ini | grep "^basepath_logbackup" | awk -F"=" '{print $2}' |xargs`
 
 backup_check_fs_usage "$DATAPATH" "$LOGPATH" "$LOGBKPPATH"
 
 ####################################### Check tenant status ############################
 backup_check_tenant_status "$userstorekey"
 
+####################################### Check license type ############################
 exit 0
