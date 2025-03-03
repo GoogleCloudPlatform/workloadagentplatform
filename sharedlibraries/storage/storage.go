@@ -36,7 +36,9 @@ import (
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	"golang.org/x/oauth2/google"
+	"golang.org/x/oauth2"
 	"github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries/log"
+	"github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries/secret"
 )
 
 // DefaultLogDelay sets the default upload and download progress logging to once a minute.
@@ -199,6 +201,7 @@ type ConnectParameters struct {
 	BucketName       string
 	UserAgentSuffix  string
 	Endpoint         string
+	OAuthToken       secret.String
 	VerifyConnection bool
 	MaxRetries       int64
 	UserAgent        string
@@ -221,6 +224,9 @@ func ConnectToBucket(ctx context.Context, p *ConnectParameters) (*storage.Bucket
 	}
 	if p.Endpoint != "" {
 		opts = append(opts, option.WithEndpoint(p.Endpoint))
+	}
+	if p.OAuthToken.SecretValue() != "" {
+		opts = append(opts, option.WithTokenSource(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: p.OAuthToken.SecretValue()})))
 	}
 	client, err := p.StorageClient(ctx, opts...)
 	if err != nil {
