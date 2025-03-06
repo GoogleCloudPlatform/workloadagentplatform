@@ -131,6 +131,7 @@ func Communicate(ctx context.Context, endpoint string, channel string, messageHa
 		logAndBackoff(ctx, eBackoff, logMsg)
 		conn = establishConnection(ctx, endpoint, channel)
 	}
+	log.CtxLogger(ctx).Debugw("Successfully established connection to UAP Highway.", "channel", channel)
 	// Reset backoff once we successfully connected.
 	eBackoff.Reset()
 
