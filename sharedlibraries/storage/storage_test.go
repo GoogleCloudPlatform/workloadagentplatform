@@ -33,6 +33,7 @@ import (
 	"google.golang.org/api/option"
 	"google.golang.org/protobuf/testing/protocmp"
 	"github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries/log"
+	"github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries/secret"
 )
 
 func TestMain(t *testing.M) {
@@ -139,6 +140,18 @@ func TestConnectToBucket(t *testing.T) {
 				},
 				VerifyConnection: true,
 				ServiceAccount:   "test-account",
+			},
+			want:   nil,
+			wantOk: false,
+		},
+		{
+			name: "ClientCreateFailOAuthToken",
+			p: &ConnectParameters{
+				StorageClient: func(ctx context.Context, opts ...option.ClientOption) (*storage.Client, error) {
+					return nil, errors.New("client create error")
+				},
+				VerifyConnection: true,
+				OAuthToken:       secret.String("test-token"),
 			},
 			want:   nil,
 			wantOk: false,
