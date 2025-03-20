@@ -184,10 +184,12 @@ func TestBuildFloat64(t *testing.T) {
 
 func TestMonitoredResource(t *testing.T) {
 	tests := []struct {
-		name       string
-		cloudProps *metadataserver.CloudProperties
-		bareMetal  bool
-		want       *mrespb.MonitoredResource
+		name           string
+		cloudProps     *metadataserver.CloudProperties
+		bareMetal      bool
+		healthbeat     bool
+		resourceLabels map[string]string
+		want           *mrespb.MonitoredResource
 	}{
 		{
 			name:       "BareMetal",
@@ -201,17 +203,38 @@ func TestMonitoredResource(t *testing.T) {
 		{
 			name:       "GCE",
 			cloudProps: defaultCloudProperties,
-			bareMetal:  false,
 			want: &mrespb.MonitoredResource{
 				Type:   "gce_instance",
 				Labels: gceLabels,
+			},
+		},
+
+		{
+			name:           "BareMetalHeartbeat",
+			cloudProps:     bmsCloudProperties,
+			bareMetal:      true,
+			healthbeat:     true,
+			resourceLabels: map[string]string{"instance_id": "123"},
+			want: &mrespb.MonitoredResource{
+				Type:   "compute.googleapis.com/WorkloadProcess",
+				Labels: map[string]string{"instance_id": "123"},
+			},
+		},
+		{
+			name:           "GCEHeartbeat",
+			cloudProps:     defaultCloudProperties,
+			healthbeat:     true,
+			resourceLabels: map[string]string{"instance_id": "123"},
+			want: &mrespb.MonitoredResource{
+				Type:   "compute.googleapis.com/WorkloadProcess",
+				Labels: map[string]string{"instance_id": "123"},
 			},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got := monitoredResource(test.cloudProps, test.bareMetal)
+			got := monitoredResource(test.cloudProps, test.bareMetal, test.healthbeat, test.resourceLabels)
 			if diff := cmp.Diff(test.want, got, protocmp.Transform()); diff != "" {
 				t.Errorf("Failure in monitoredResource(), (-want +got):\n%s", diff)
 			}
