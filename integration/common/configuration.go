@@ -22,8 +22,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"go.uber.org/zap/zapcore"
-	"github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries/log"
 	"github.com/GoogleCloudPlatform/workloadagentplatform/integration/common/usagemetrics"
+	"github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries/log"
 )
 
 // ReadConfigFile abstracts os.ReadFile function for testability.
@@ -46,6 +46,7 @@ func Read(path string, read ReadConfigFile, config proto.Message) (proto.Message
 		usagemetrics.Error(usagemetrics.GlobalMalformedConfigFileError)
 		log.Logger.Errorw("Invalid content in the configuration file", "file", path, "content", string(content))
 		log.Logger.Errorf("Configuration JSON at '%s' has error: %v.  Please fix the JSON and restart the agent", path, err)
+		return nil, err
 	}
 	return config, nil
 }

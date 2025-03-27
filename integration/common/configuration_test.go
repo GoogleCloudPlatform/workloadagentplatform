@@ -38,6 +38,7 @@ func TestRead(t *testing.T) {
 		readFunc ReadConfigFile
 		config   proto.Message
 		want     *epb.Configuration
+		wantErr  bool
 	}{
 		{
 			name: "ConfigFileWithContents",
@@ -61,16 +62,18 @@ func TestRead(t *testing.T) {
 				fileContent := `{"log_to_cloud": true, "cloud_properties": {"project_id": "config-project-id", "instance_id": "config-instance-id", "zone": "config-zone", } }`
 				return []byte(fileContent), nil
 			},
-			config: &epb.Configuration{},
-			want:   &epb.Configuration{LogToCloud: &wpb.BoolValue{Value: true}},
+			wantErr: true,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got, _ := Read(test.path, test.readFunc, test.config)
+			got, err := Read(test.path, test.readFunc, test.config)
 			if diff := cmp.Diff(test.want, got, protocmp.Transform()); diff != "" {
 				t.Errorf("ReadFromFile() for path: %s\n(-want +got):\n%s", test.path, diff)
+			}
+			if test.wantErr && err == nil {
+				t.Errorf("ReadFromFile() for path: %s\nExpected error but got nil", test.path)
 			}
 		})
 	}
