@@ -100,5 +100,5 @@ if [ "$1" = "0" ]; then
   rm -fr %{_confdir}
 else
   # log usage metrics for upgrade
-  timeout 30 %{_bindir}/google_cloud_example_agent logusage -s UPDATED -agent-version "%{name}-%{VERSION}-%{RELEASE}" &> /dev/null || true
+  timeout 30 %{_bindir}/google_cloud_example_agent logusage -s UPDATED --agent-version "%{name}-%{VERSION}-%{RELEASE}" &> /dev/null || true
 fi

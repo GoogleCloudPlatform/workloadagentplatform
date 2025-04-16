@@ -20,9 +20,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries/log"
 	pb "github.com/GoogleCloudPlatform/workloadagentplatform/integration/example/protos"
 	"github.com/GoogleCloudPlatform/workloadagentplatform/integration/example/usagemetrics"
+	"github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries/log"
 )
 
 // Slow implements the Service interface for the slow service.
