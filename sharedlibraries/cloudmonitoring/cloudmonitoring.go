@@ -28,6 +28,8 @@ import (
 	"github.com/googleapis/gax-go/v2"
 	"github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries/log"
 
+	metricpb "google.golang.org/genproto/googleapis/api/metric"
+	monitoredrespb "google.golang.org/genproto/googleapis/api/monitoredres"
 	mpb "google.golang.org/genproto/googleapis/monitoring/v3"
 	mrpb "google.golang.org/genproto/googleapis/monitoring/v3"
 )
@@ -91,6 +93,12 @@ type TimeSeriesCreator interface {
 // TimeSeriesQuerier provides an easily testable translation to the cloud monitoring API.
 type TimeSeriesQuerier interface {
 	QueryTimeSeries(ctx context.Context, req *mpb.QueryTimeSeriesRequest, opts ...gax.CallOption) ([]*mrpb.TimeSeriesData, error)
+}
+
+// TimeSeriesDescriptorQuerier provides an easily testable translation to the cloud monitoring API.
+type TimeSeriesDescriptorQuerier interface {
+	GetMetricDescriptor(ctx context.Context, req *mpb.GetMetricDescriptorRequest, opts ...gax.CallOption) (*metricpb.MetricDescriptor, error)
+	GetMonitoredResourceDescriptor(ctx context.Context, req *mpb.GetMonitoredResourceDescriptorRequest, opts ...gax.CallOption) (*monitoredrespb.MonitoredResourceDescriptor, error)
 }
 
 // CreateTimeSeriesWithRetry decorates TimeSeriesCreator.CreateTimeSeries with a retry mechanism.

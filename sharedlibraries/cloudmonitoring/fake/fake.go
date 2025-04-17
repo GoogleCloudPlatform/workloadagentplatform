@@ -22,6 +22,8 @@ import (
 
 	"github.com/googleapis/gax-go/v2"
 
+	metricpb "google.golang.org/genproto/googleapis/api/metric"
+	monitoredrespb "google.golang.org/genproto/googleapis/api/monitoredres"
 	mpb "google.golang.org/genproto/googleapis/monitoring/v3"
 	mrpb "google.golang.org/genproto/googleapis/monitoring/v3"
 )
@@ -54,7 +56,26 @@ type TimeSeriesQuerier struct {
 	TS    []*mrpb.TimeSeriesData
 }
 
+// QueryTimeSeries returns the time series data and error.
 func (f *TimeSeriesQuerier) QueryTimeSeries(ctx context.Context, req *mpb.QueryTimeSeriesRequest, ops ...gax.CallOption) ([]*mrpb.TimeSeriesData, error) {
 	f.Calls = append(f.Calls, req)
 	return f.TS, f.Err
+}
+
+// TimeSeriesDescriptorQuerier is a fake which implements the TimeSeriesDescriptorQuerier interface.
+type TimeSeriesDescriptorQuerier struct {
+	MetricDescriptorErr   error
+	MetricDescriptor      *metricpb.MetricDescriptor
+	ResourceDescriptor    *monitoredrespb.MonitoredResourceDescriptor
+	ResourceDescriptorErr error
+}
+
+// GetMetricDescriptor returns the metric descriptor and error.
+func (f *TimeSeriesDescriptorQuerier) GetMetricDescriptor(ctx context.Context, req *mpb.GetMetricDescriptorRequest, opts ...gax.CallOption) (*metricpb.MetricDescriptor, error) {
+	return f.MetricDescriptor, f.MetricDescriptorErr
+}
+
+// GetMonitoredResourceDescriptor returns the monitored resource descriptor and error.
+func (f *TimeSeriesDescriptorQuerier) GetMonitoredResourceDescriptor(ctx context.Context, req *mpb.GetMonitoredResourceDescriptorRequest, opts ...gax.CallOption) (*monitoredrespb.MonitoredResourceDescriptor, error) {
+	return f.ResourceDescriptor, f.ResourceDescriptorErr
 }
