@@ -93,6 +93,7 @@ func NewCommand(ctx context.Context, lp log.Parameters, cloudProps *cpb.CloudPro
 	logUsageCmd.Flags().IntVarP(&l.usageError, "error", "e", 0, "usage error code")
 	logUsageCmd.Flags().StringVarP(&l.image, "image", "i", "", "the image url of the compute instance(optional), default value is retrieved from metadata)")
 
+	logUsageCmd.Hidden = true
 	return logUsageCmd
 }
 
