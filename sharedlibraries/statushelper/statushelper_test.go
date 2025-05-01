@@ -285,7 +285,7 @@ func TestKernelVersion(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got, err := KernelVersion(t.Context(), test.osType, test.exec.ExecuteCommand)
+			got, err := KernelVersion(context.Background(), test.osType, test.exec.ExecuteCommand)
 			gotErr := err != nil
 			if gotErr != test.wantErr {
 				t.Errorf("KernelVersion() returned err: %v, wantErr: %v", err, test.wantErr)
