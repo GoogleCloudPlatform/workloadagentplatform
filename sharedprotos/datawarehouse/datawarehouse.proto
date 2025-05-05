@@ -19,6 +19,7 @@ syntax = "proto3";
 package workloadagentplatform.sharedprotos.datawarehouse;
 
 import "google/protobuf/timestamp.proto";
+import "sharedprotos/status/status.proto";
 import "sharedprotos/system/system.proto";
 
 option go_package = "github.com/GoogleCloudPlatform/workloadagentplatform/sharedprotos/datawarehouse";
@@ -56,6 +57,9 @@ message Insight {
 
   // The insights data for workload validation of torso workloads.
   TorsoValidation torso_validation = 6;
+
+  // The status of the agent and services (process metrics, host metrics, etc).
+  workloadagentplatform.sharedprotos.status.AgentStatus agent_status = 7;
 }
 
 // A presentation of SAP workload insight.
