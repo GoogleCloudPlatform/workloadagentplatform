@@ -125,12 +125,11 @@ func monitoredResource(cp *metadataserver.CloudProperties, bareMetal bool, hearb
 		}
 	case bareMetal: // Regular custom metrics for bare metal.
 		return &mrespb.MonitoredResource{
-			Type: "generic_node",
+			Type: "baremetalsolution.googleapis.com/Instance",
 			Labels: map[string]string{
-				"project_id": cp.ProjectID,
-				"location":   cp.Region,
-				"namespace":  cp.InstanceName,
-				"node_id":    cp.InstanceName,
+				"resource_container": cp.ProjectID,
+				"location":           cp.Region,
+				"instance_id":        cp.InstanceID,
 			},
 		}
 	case hearbeat: // Hearbeat metrics for GCE.

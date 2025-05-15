@@ -49,10 +49,9 @@ var (
 		"instance_id": "123456",
 	}
 	bmsLabels = map[string]string{
-		"project_id": "test-project",
-		"location":   "test-location",
-		"namespace":  "test-bms",
-		"node_id":    "test-bms",
+		"resource_container": "test-project",
+		"location":           "test-location",
+		"instance_id":        "test-bms-id",
 	}
 	defaultCloudProperties = &metadataserver.CloudProperties{
 		ProjectID:  "test-project",
@@ -63,6 +62,7 @@ var (
 		ProjectID:    "test-project",
 		Region:       "test-location",
 		InstanceName: "test-bms",
+		InstanceID:   "test-bms-id",
 	}
 	now = &tpb.Timestamp{
 		Seconds: 1234,
@@ -196,7 +196,7 @@ func TestMonitoredResource(t *testing.T) {
 			cloudProps: bmsCloudProperties,
 			bareMetal:  true,
 			want: &mrespb.MonitoredResource{
-				Type:   "generic_node",
+				Type:   "baremetalsolution.googleapis.com/Instance",
 				Labels: bmsLabels,
 			},
 		},
