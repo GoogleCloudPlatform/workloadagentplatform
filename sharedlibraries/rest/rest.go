@@ -116,10 +116,11 @@ func (r *Rest) GetResponse(ctx context.Context, method string, baseURL string, d
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		log.CtxLogger(ctx).Errorw("Response status code is not OK", "error", string(bodyBytes))
+
 		var googleapiErr []errorResponse
 		if err = json.Unmarshal([]byte(bodyBytes), &googleapiErr); err != nil {
-			log.CtxLogger(ctx).Errorw("Response status code is not OK", "error", string(bodyBytes))
-			return nil, fmt.Errorf("failed to get response, check error in logs")
+			return nil, fmt.Errorf("response code is not okay, error: %s", string(bodyBytes))
 		}
 		log.CtxLogger(ctx).Errorw("getresponse error", "error", googleapiErr)
 		if googleapiErr[0].Err.Code != http.StatusOK {
