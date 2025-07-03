@@ -277,6 +277,30 @@ func CtxLogger(ctx context.Context) *zap.SugaredLogger {
 	return Logger
 }
 
+// SetUpLoggingForCloudRun sets up logging for Cloud Run.
+func SetUpLoggingForCloudRun(params Parameters) {
+	encoderConfig := zap.NewProductionEncoderConfig()
+	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	encoderConfig.LevelKey = "severity"
+	encoderConfig.MessageKey = "message"
+
+	jsonEncoder := zapcore.NewJSONEncoder(encoderConfig)
+	stdoutSyncer := zapcore.AddSync(os.Stdout)
+
+	level = params.Level.String()
+	logLevel := zap.NewAtomicLevelAt(params.Level)
+
+	core := zapcore.NewCore(
+		jsonEncoder,
+		stdoutSyncer,
+		logLevel,
+	)
+
+	logger := zap.New(core, zap.AddCaller()) // AddCaller for file/line info
+	defer logger.Sync()                      // Ensure all buffered logs are flushed
+	Logger = logger.Sugar()
+}
+
 // GetLevel will return the current logging level as a string.
 func GetLevel() string {
 	return level

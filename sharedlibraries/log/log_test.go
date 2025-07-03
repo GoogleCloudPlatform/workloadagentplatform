@@ -142,6 +142,15 @@ func TestSetupLoggingForOTE(t *testing.T) {
 	}
 }
 
+func TestSetupLoggingForCloudRun(t *testing.T) {
+	wantLevel := "debug"
+	SetUpLoggingForCloudRun(Parameters{Level: zapcore.DebugLevel})
+	got := GetLevel()
+	if got != wantLevel {
+		t.Errorf("SetupLoggingForCloudRun() level is incorrect, got: %s, want: %s", got, wantLevel)
+	}
+}
+
 func TestDefaultOTEPath(t *testing.T) {
 	tests := []struct {
 		name        string
