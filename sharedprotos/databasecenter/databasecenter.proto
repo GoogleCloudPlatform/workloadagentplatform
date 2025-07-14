@@ -224,7 +224,7 @@ enum InstanceType {
 }
 
 // Common model for database resource instance metadata.
-// Next ID: 25
+// Next ID: 26
 message DatabaseResourceMetadata {
   // Unique identifier for a Database resource
   DatabaseResourceId id = 1;
@@ -317,7 +317,7 @@ message DatabaseResourceMetadata {
   // Tags associated with this resources.
   Tags tags_set = 20;
 
-  reserved 12, 16, 17, 22, 23, 24;
+  reserved 12, 16, 17, 22, 23, 24, 25;
 }
 
 // Configuration for availability of database instance
