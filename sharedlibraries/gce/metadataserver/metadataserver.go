@@ -93,15 +93,17 @@ type (
 
 	defaultInfo struct {
 		Scopes []string `json:"scopes"`
+		Email  string   `json:"email"`
 	}
 
 	// CloudProperties contains the cloud properties of the instance.
 	CloudProperties struct {
 		ProjectID, NumericProjectID, InstanceID, Zone, InstanceName, Image, MachineType, Region string
 		// Platform identifies the compute environment, e.g., default = GCE can be CLOUD_RUN.
-		Platform string
-		JobName  string // Cloud Run job name
-		Scopes   []string
+		Platform            string
+		JobName             string // Cloud Run job name
+		Scopes              []string
+		ServiceAccountEmail string
 	}
 )
 
@@ -235,6 +237,7 @@ func requestProperties() (*CloudProperties, error) {
 	instanceName := instance.Name
 	image := instance.Image
 	scopes := instance.ServiceAccounts.DefaultInfo.Scopes
+	serviceAccountEmail := instance.ServiceAccounts.DefaultInfo.Email
 
 	if image == "" {
 		image = ImageUnknown
@@ -244,7 +247,9 @@ func requestProperties() (*CloudProperties, error) {
 	}
 
 	log.Logger.Debugw("Default Cloud Properties from metadata server",
-		"projectid", projectID, "projectnumber", numericProjectID, "instanceid", instanceID, "zone", zone, "instancename", instanceName, "image", image, "machinetype", machineType, "scopes", scopes)
+		"projectid", projectID, "projectnumber", numericProjectID, "instanceid", instanceID, "zone", zone,
+		"instancename", instanceName, "image", image, "machinetype", machineType, "scopes", scopes,
+		"defaultserviceaccountemail", serviceAccountEmail)
 
 	if projectID == "" || numericProjectID == "0" || instanceID == "0" || zone == "" || instanceName == "" {
 		return nil, fmt.Errorf("metadata server responded with incomplete information")
@@ -252,15 +257,16 @@ func requestProperties() (*CloudProperties, error) {
 	region := regionFromZone(zone)
 
 	return &CloudProperties{
-		ProjectID:        projectID,
-		NumericProjectID: numericProjectID,
-		InstanceID:       instanceID,
-		Zone:             zone,
-		Region:           region,
-		InstanceName:     instanceName,
-		Image:            image,
-		MachineType:      machineType,
-		Scopes:           scopes,
+		ProjectID:           projectID,
+		NumericProjectID:    numericProjectID,
+		InstanceID:          instanceID,
+		Zone:                zone,
+		Region:              region,
+		InstanceName:        instanceName,
+		Image:               image,
+		MachineType:         machineType,
+		Scopes:              scopes,
+		ServiceAccountEmail: serviceAccountEmail,
 	}, nil
 }
 

@@ -244,20 +244,22 @@ func TestReadCloudPropertiesWithRetry(t *testing.T) {
 						ServiceAccounts: serviceAccounts{
 							DefaultInfo: defaultInfo{
 								Scopes: []string{"scope1", "scope2"},
+								Email:  "test-email",
 							},
 						},
 					},
 				})},
 			want: &CloudProperties{
-				ProjectID:        "test-project",
-				NumericProjectID: "1",
-				InstanceID:       "101",
-				Zone:             "test-zone",
-				InstanceName:     "test-instance-name",
-				Image:            "test-image",
-				MachineType:      "test-machine-type",
-				Region:           "test-zone",
-				Scopes:           []string{"scope1", "scope2"},
+				ProjectID:           "test-project",
+				NumericProjectID:    "1",
+				InstanceID:          "101",
+				Zone:                "test-zone",
+				InstanceName:        "test-instance-name",
+				Image:               "test-image",
+				MachineType:         "test-machine-type",
+				Region:              "test-zone",
+				Scopes:              []string{"scope1", "scope2"},
+				ServiceAccountEmail: "test-email",
 			},
 		},
 		{
@@ -387,20 +389,22 @@ func TestFetchCloudProperties(t *testing.T) {
 				ServiceAccounts: serviceAccounts{
 					DefaultInfo: defaultInfo{
 						Scopes: []string{"scope1", "scope2"},
+						Email:  "test-email",
 					},
 				},
 			},
 		})}
 	want := &CloudProperties{
-		ProjectID:        "test-project",
-		NumericProjectID: "1",
-		InstanceID:       "101",
-		Zone:             "test-zone",
-		InstanceName:     "test-instance-name",
-		Image:            "test-image",
-		MachineType:      "test-machine-type",
-		Region:           "test-zone",
-		Scopes:           []string{"scope1", "scope2"},
+		ProjectID:           "test-project",
+		NumericProjectID:    "1",
+		InstanceID:          "101",
+		Zone:                "test-zone",
+		InstanceName:        "test-instance-name",
+		Image:               "test-image",
+		MachineType:         "test-machine-type",
+		Region:              "test-zone",
+		Scopes:              []string{"scope1", "scope2"},
+		ServiceAccountEmail: "test-email",
 	}
 
 	ts := mockMetadataServer(t, url)
