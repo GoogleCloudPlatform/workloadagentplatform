@@ -21,6 +21,7 @@ package workloadagentplatform.sharedprotos.databasecenter;
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/wrappers.proto";
+import "net/proto2/contrib/validator/annotations.proto";
 
 option go_package = "github.com/GoogleCloudPlatform/workloadagentplatform/sharedprotos/databasecenter";
 
@@ -234,7 +235,9 @@ message DatabaseResourceMetadata {
   // can be used to to create a new resource within the same source. Resource
   // name to follow CAIS resource_name format as noted here
   // go/condor-common-datamodel
-  string resource_name = 2;
+  string resource_name = 2 [(validator.rule) = {
+    predicate: "len($) <= 500 ?: string length should not exceed 500 characters"
+  }];
 
   // Identifier for this resource's immediate parent/primary resource if the
   // current resource is a replica or derived form of another Database resource.
@@ -246,18 +249,24 @@ message DatabaseResourceMetadata {
   // Primary resource location.
   // REQUIRED if the immediate parent exists when first time resource is getting
   // ingested, otherwise optional.
-  string primary_resource_location = 21;
+  string primary_resource_location = 21 [(validator.rule) = {
+    predicate: "len($) <= 500 ?: string length should not exceed 500 characters"
+  }];
 
   // Closest parent Cloud Resource Manager container of
   // this resource. It must be resource name of a Cloud Resource Manager
   // project with the format of "<type>/<number>", such as
   // "projects/123".
   // For GCP provided resources, number should be project number.
-  string resource_container = 4;
+  string resource_container = 4 [(validator.rule) = {
+    predicate: "len($) <= 500 ?: string length should not exceed 500 characters"
+  }];
 
   // The resource location.
   // REQUIRED
-  string location = 5;
+  string location = 5 [(validator.rule) = {
+    predicate: "len($) <= 500 ?: string length should not exceed 500 characters"
+  }];
 
   // The creation time of the resource, i.e. the time when resource is created
   // and recorded in partner service.
