@@ -19,6 +19,7 @@ package log
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"cloud.google.com/go/logging"
@@ -47,6 +48,7 @@ var severityMapping = map[zapcore.Level]logging.Severity{
 func CloudLoggingClient(ctx context.Context, projectID string) *logging.Client {
 	client, err := CreateClient(ctx, projectID)
 	if err != nil {
+		log.Printf("Failed to create cloud logging client: %v", err)
 		return nil
 	}
 	return client
@@ -56,6 +58,7 @@ func CloudLoggingClient(ctx context.Context, projectID string) *logging.Client {
 func CloudLoggingClientWithUserAgent(ctx context.Context, projectID string, userAgent string) *logging.Client {
 	client, err := CreateClientWithUserAgent(ctx, projectID, userAgent)
 	if err != nil {
+		log.Printf("Failed to create cloud logging client with user agent: %v", err)
 		return nil
 	}
 	return client
