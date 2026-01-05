@@ -85,7 +85,7 @@ func TestAnyResponse(t *testing.T) {
 			ctx := context.Background()
 			got := anyResponse(ctx, test.gar)
 			if diff := cmp.Diff(test.want.GetTypeUrl(), got.GetTypeUrl()); diff != "" {
-				t.Errorf("anyResponse(%v) returned diff (-want +got):\n%s", test.name, diff)
+				t.Errorf("anyResponse(%q) returned diff (-want +got):\n%s", test.name, diff)
 			}
 		})
 	}
@@ -132,10 +132,10 @@ func TestParseRequest(t *testing.T) {
 			ctx := context.Background()
 			got, err := parseRequest(ctx, test.msg)
 			if test.wantErr && err == nil {
-				t.Errorf("parseRequest(%v) returned nil error, want error", test.name)
+				t.Errorf("parseRequest(%q) returned nil error, want error", test.name)
 			}
 			if diff := cmp.Diff(test.want, got, protocmp.Transform()); diff != "" {
-				t.Errorf("parseRequest(%v) returned diff (-want +got):\n%s", test.name, diff)
+				t.Errorf("parseRequest(%q) returned diff (-want +got):\n%s", test.name, diff)
 			}
 		})
 	}
@@ -270,45 +270,31 @@ func TestHandleShellCommand(t *testing.T) {
 	}
 }
 
-func TestMessageHandler(t *testing.T) {
+func TestProcessCommands(t *testing.T) {
 	tests := []struct {
 		name    string
 		message *gpb.GuestActionRequest
-		anyMsg  *anypb.Any
-		want    *gpb.GuestActionResponse
+		want    []*gpb.CommandResult
 		wantErr bool
 	}{
 		{
 			name:    "NoCommands",
 			message: &gpb.GuestActionRequest{},
-			want: &gpb.GuestActionResponse{
-				CommandResults: []*gpb.CommandResult{},
-				Error:          &gpb.GuestActionError{ErrorMessage: ""},
-			},
+			want:    nil,
 			wantErr: false,
-		},
-		{
-			name:    "BadRequest",
-			message: &gpb.GuestActionRequest{},
-			anyMsg:  &anypb.Any{TypeUrl: "type.googleapis.com/workloadagentplatform.sharedprotos.guestactions.GuestActionRequest", Value: []byte("invalid")},
-			want:    &gpb.GuestActionResponse{},
-			wantErr: true,
 		},
 		{
 			name: "UnknownCommandType",
 			message: &gpb.GuestActionRequest{
 				Commands: []*gpb.Command{{}},
 			},
-			want: &gpb.GuestActionResponse{
-				CommandResults: []*gpb.CommandResult{
-					&gpb.CommandResult{
-						Command:  nil,
-						Stdout:   "received unknown command: ",
-						Stderr:   "received unknown command: ",
-						ExitCode: 1,
-					},
+			want: []*gpb.CommandResult{
+				&gpb.CommandResult{
+					Command:  nil,
+					Stdout:   "received unknown command: ",
+					Stderr:   "received unknown command: ",
+					ExitCode: 1,
 				},
-				Error: &gpb.GuestActionError{ErrorMessage: ""},
 			},
 			wantErr: true,
 		},
@@ -323,20 +309,17 @@ func TestMessageHandler(t *testing.T) {
 					},
 				},
 			},
-			want: &gpb.GuestActionResponse{
-				CommandResults: []*gpb.CommandResult{
-					{
-						Command: &gpb.Command{
-							CommandType: &gpb.Command_AgentCommand{
-								AgentCommand: &gpb.AgentCommand{Command: "version"},
-							},
+			want: []*gpb.CommandResult{
+				{
+					Command: &gpb.Command{
+						CommandType: &gpb.Command_AgentCommand{
+							AgentCommand: &gpb.AgentCommand{Command: "version"},
 						},
-						Stdout:   fmt.Sprintf("Google Cloud Agent for SAP version test response"),
-						Stderr:   "",
-						ExitCode: 0,
 					},
+					Stdout:   fmt.Sprintf("Google Cloud Agent for SAP version test response"),
+					Stderr:   "",
+					ExitCode: 0,
 				},
-				Error: &gpb.GuestActionError{ErrorMessage: ""},
 			},
 			wantErr: false,
 		},
@@ -351,28 +334,25 @@ func TestMessageHandler(t *testing.T) {
 					},
 				},
 			},
-			want: &gpb.GuestActionResponse{
-				CommandResults: []*gpb.CommandResult{
-					{
-						Command: &gpb.Command{
-							CommandType: &gpb.Command_AgentCommand{
-								AgentCommand: &gpb.AgentCommand{Command: "unknown_command"},
-							},
+			want: []*gpb.CommandResult{
+				{
+					Command: &gpb.Command{
+						CommandType: &gpb.Command_AgentCommand{
+							AgentCommand: &gpb.AgentCommand{Command: "unknown_command"},
 						},
-						Stdout: fmt.Sprintf("received unknown agent command: %s", prototext.Format(&gpb.Command{
-							CommandType: &gpb.Command_AgentCommand{
-								AgentCommand: &gpb.AgentCommand{Command: "unknown_command"},
-							},
-						})),
-						Stderr: fmt.Sprintf("received unknown agent command: %s", prototext.Format(&gpb.Command{
-							CommandType: &gpb.Command_AgentCommand{
-								AgentCommand: &gpb.AgentCommand{Command: "unknown_command"},
-							},
-						})),
-						ExitCode: 1,
 					},
+					Stdout: fmt.Sprintf("received unknown agent command: %s", prototext.Format(&gpb.Command{
+						CommandType: &gpb.Command_AgentCommand{
+							AgentCommand: &gpb.AgentCommand{Command: "unknown_command"},
+						},
+					})),
+					Stderr: fmt.Sprintf("received unknown agent command: %s", prototext.Format(&gpb.Command{
+						CommandType: &gpb.Command_AgentCommand{
+							AgentCommand: &gpb.AgentCommand{Command: "unknown_command"},
+						},
+					})),
+					ExitCode: 1,
 				},
-				Error: &gpb.GuestActionError{ErrorMessage: ""},
 			},
 			wantErr: true,
 		},
@@ -387,20 +367,17 @@ func TestMessageHandler(t *testing.T) {
 					},
 				},
 			},
-			want: &gpb.GuestActionResponse{
-				CommandResults: []*gpb.CommandResult{
-					{
-						Command: &gpb.Command{
-							CommandType: &gpb.Command_ShellCommand{
-								ShellCommand: &gpb.ShellCommand{Command: "eecho", Args: "Hello World!"},
-							},
+			want: []*gpb.CommandResult{
+				{
+					Command: &gpb.Command{
+						CommandType: &gpb.Command_ShellCommand{
+							ShellCommand: &gpb.ShellCommand{Command: "eecho", Args: "Hello World!"},
 						},
-						Stdout:   "",
-						Stderr:   "Command executable: \"eecho\" not found.",
-						ExitCode: 1,
 					},
+					Stdout:   "",
+					Stderr:   "Command executable: \"eecho\" not found.",
+					ExitCode: 1,
 				},
-				Error: &gpb.GuestActionError{ErrorMessage: ""},
 			},
 			wantErr: true,
 		},
@@ -415,20 +392,17 @@ func TestMessageHandler(t *testing.T) {
 					},
 				},
 			},
-			want: &gpb.GuestActionResponse{
-				CommandResults: []*gpb.CommandResult{
-					{
-						Command: &gpb.Command{
-							CommandType: &gpb.Command_ShellCommand{
-								ShellCommand: &gpb.ShellCommand{Command: "echo", Args: "Hello World!"},
-							},
+			want: []*gpb.CommandResult{
+				{
+					Command: &gpb.Command{
+						CommandType: &gpb.Command_ShellCommand{
+							ShellCommand: &gpb.ShellCommand{Command: "echo", Args: "Hello World!"},
 						},
-						Stdout:   "Hello World!\n",
-						Stderr:   "",
-						ExitCode: 0,
 					},
+					Stdout:   "Hello World!\n",
+					Stderr:   "",
+					ExitCode: 0,
 				},
-				Error: &gpb.GuestActionError{ErrorMessage: ""},
 			},
 			wantErr: false,
 		},
@@ -443,18 +417,173 @@ func TestMessageHandler(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			msg, _ := anypb.New(test.message)
-			if test.anyMsg != nil {
-				msg = test.anyMsg
-			}
-			got, err := ga.messageHandler(ctx, msg, nil)
-			wantAny, _ := anypb.New(test.want)
+			got, err := ga.processCommands(ctx, test.message, nil)
 			if test.wantErr {
 				if err == nil {
-					t.Errorf("messageHandler(%v) returned nil error, want error", test.name)
+					t.Errorf("processCommands(%q) returned nil error, want error", test.name)
 				}
-			} else if diff := cmp.Diff(wantAny, got, protocmp.Transform(), protocmp.IgnoreFields(&gpb.GuestActionError{}, "error_message")); diff != "" {
-				t.Errorf("messageHandler(%v) returned diff (-want +got):\n%s", test.name, diff)
+			} else if err != nil {
+				t.Errorf("processCommands(%q) returned error: %v, want nil error", test.name, err)
+			}
+
+			if diff := cmp.Diff(test.want, got, protocmp.Transform()); diff != "" {
+				t.Errorf("processCommands(%q) returned diff (-want +got):\n%s", test.name, diff)
+			}
+		})
+	}
+}
+
+func TestIsLRORequest(t *testing.T) {
+	dummyHandler := func(ctx context.Context, command *gpb.Command, cloudProperties *metadataserver.CloudProperties) *gpb.CommandResult {
+		return &gpb.CommandResult{
+			Command:  command,
+			Stdout:   "dummy handler called",
+			ExitCode: 0,
+		}
+	}
+	ga := GuestActions{
+		options: Options{
+			Handlers: map[string]GuestActionHandler{
+				"synccommand": dummyHandler,
+			},
+			LROHandlers: map[string]GuestActionHandler{
+				"lrocommand": dummyHandler,
+			},
+		},
+	}
+
+	tests := []struct {
+		name    string
+		request *gpb.GuestActionRequest
+		want    bool
+	}{
+		{
+			name:    "NoCommands",
+			request: &gpb.GuestActionRequest{},
+			want:    false,
+		},
+		{
+			name: "LROCommand",
+			request: &gpb.GuestActionRequest{
+				Commands: []*gpb.Command{
+					{
+						CommandType: &gpb.Command_AgentCommand{
+							AgentCommand: &gpb.AgentCommand{Command: "lrocommand"},
+						},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "SyncCommand",
+			request: &gpb.GuestActionRequest{
+				Commands: []*gpb.Command{
+					{
+						CommandType: &gpb.Command_AgentCommand{
+							AgentCommand: &gpb.AgentCommand{Command: "synccommand"},
+						},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "ShellCommand",
+			request: &gpb.GuestActionRequest{
+				Commands: []*gpb.Command{
+					{
+						CommandType: &gpb.Command_ShellCommand{
+							ShellCommand: &gpb.ShellCommand{Command: "echo"},
+						},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "UnknownAgentCommand",
+			request: &gpb.GuestActionRequest{
+				Commands: []*gpb.Command{
+					{
+						CommandType: &gpb.Command_AgentCommand{
+							AgentCommand: &gpb.AgentCommand{Command: "unknown"},
+						},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "CommandWithNoType",
+			request: &gpb.GuestActionRequest{
+				Commands: []*gpb.Command{
+					{},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "MixedCommandsWithLRO",
+			request: &gpb.GuestActionRequest{
+				Commands: []*gpb.Command{
+					{
+						CommandType: &gpb.Command_AgentCommand{
+							AgentCommand: &gpb.AgentCommand{Command: "synccommand"},
+						},
+					},
+					{
+						CommandType: &gpb.Command_AgentCommand{
+							AgentCommand: &gpb.AgentCommand{Command: "lrocommand"},
+						},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "MixedCommandsWithoutLRO",
+			request: &gpb.GuestActionRequest{
+				Commands: []*gpb.Command{
+					{
+						CommandType: &gpb.Command_AgentCommand{
+							AgentCommand: &gpb.AgentCommand{Command: "synccommand"},
+						},
+					},
+					{
+						CommandType: &gpb.Command_ShellCommand{
+							ShellCommand: &gpb.ShellCommand{Command: "echo"},
+						},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "ShellCommandThenLRO",
+			request: &gpb.GuestActionRequest{
+				Commands: []*gpb.Command{
+					{
+						CommandType: &gpb.Command_ShellCommand{
+							ShellCommand: &gpb.ShellCommand{Command: "echo"},
+						},
+					},
+					{
+						CommandType: &gpb.Command_AgentCommand{
+							AgentCommand: &gpb.AgentCommand{Command: "lrocommand"},
+						},
+					},
+				},
+			},
+			want: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ga.isLRORequest(tc.request)
+			if got != tc.want {
+				t.Errorf("isLRORequest() got %v, want %v", got, tc.want)
 			}
 		})
 	}

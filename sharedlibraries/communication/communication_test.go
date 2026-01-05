@@ -18,6 +18,7 @@ package communication
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -173,9 +174,9 @@ func TestSendStatusMessage(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			sendMessage = test.sendMessage
-			got := sendStatusMessage(ctx, "operationID", &apb.Any{Value: []byte("test status body")}, "status", conn)
+			got := SendStatusMessage(ctx, "operationID", &apb.Any{Value: []byte("test status body")}, "status", "lroState", conn)
 			if diff := cmp.Diff(test.want, got, cmpopts.EquateErrors()); diff != "" {
-				t.Errorf("sendStatusMessage() returned diff (-want +got):\n%s", diff)
+				t.Errorf("SendStatusMessage() returned diff (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -372,6 +373,86 @@ func TestCommunicate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestListen(t *testing.T) {
+	testMsg := &acpb.MessageBody{
+		Labels: map[string]string{"test": "test"},
+		Body:   &apb.Any{Value: []byte("test body")},
+	}
+
+	tests := []struct {
+		name    string
+		receive func() (*acpb.MessageBody, error)
+		handler ConnectionHandler
+		wantErr error
+	}{
+		{
+			name: "handler error",
+			receive: func() (*acpb.MessageBody, error) {
+				return testMsg, nil
+			},
+			handler: func(ctx context.Context, msg *acpb.MessageBody, conn *client.Connection, cp *metadataserver.CloudProperties) error {
+				return fmt.Errorf("handler error")
+			},
+			wantErr: ErrHandler,
+		},
+		{
+			name: "receive error",
+			receive: func() (*acpb.MessageBody, error) {
+				return nil, fmt.Errorf("receive error")
+			},
+			handler: func(ctx context.Context, msg *acpb.MessageBody, conn *client.Connection, cp *metadataserver.CloudProperties) error {
+				t.Fatal("handler should not be called when receive returns error")
+				return nil
+			},
+			wantErr: ErrReceive,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			receive = func(c *client.Connection) (*acpb.MessageBody, error) {
+				return tc.receive()
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			defer cancel()
+
+			err := Listen(ctx, &client.Connection{}, tc.handler, nil)
+			if !errors.Is(err, tc.wantErr) {
+				t.Errorf("Listen() returned error %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+
+	t.Run("handler called with success", func(t *testing.T) {
+		handlerCalled := make(chan bool, 1)
+		var receiveCount int
+		receive = func(c *client.Connection) (*acpb.MessageBody, error) {
+			receiveCount++
+			if receiveCount == 1 {
+				return testMsg, nil
+			}
+			return nil, fmt.Errorf("receive terminate")
+		}
+		handler := func(ctx context.Context, msg *acpb.MessageBody, conn *client.Connection, cp *metadataserver.CloudProperties) error {
+			handlerCalled <- true
+			return nil
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		err := Listen(ctx, &client.Connection{}, handler, nil)
+
+		select {
+		case <-handlerCalled:
+		default:
+			t.Errorf("Listen() did not call handler")
+		}
+		if !errors.Is(err, ErrReceive) {
+			t.Errorf("Listen() returned %v, want %v", err, ErrReceive)
+		}
+	})
 }
 
 func TestSendAgentMessage(t *testing.T) {
