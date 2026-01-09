@@ -27,6 +27,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/GoogleCloudPlatform/agentcommunication_client"
 	"google.golang.org/protobuf/encoding/prototext"
@@ -51,11 +53,73 @@ const (
 
 	lroStateRunning = "running"
 	lroStateDone    = "done"
+
+	defaultLockTimeout = 10 * time.Minute
 )
+
+// resourceKey represents a lockable resource identifier.
+type resourceKey string
+
+// lockExpiry represents the expiration time of a lock.
+type lockExpiry time.Time
+
+// locker manages time-based locks for named resources.
+type locker struct {
+	mu    sync.Mutex
+	locks map[resourceKey]lockExpiry
+}
+
+// newLocker creates and initializes a locker.
+func newLocker() *locker {
+	return &locker{
+		locks: make(map[resourceKey]lockExpiry),
+	}
+}
+
+// acquire attempts to acquire locks for the given resource keys with their specified timeouts.
+// It returns the key that is already locked and false if a lock cannot be acquired,
+// or an empty string and true if all locks are successfully acquired.
+func (l *locker) acquire(locksToAcquire map[string]time.Duration) (string, bool) {
+	if len(locksToAcquire) == 0 {
+		return "", true
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	now := time.Now()
+	// Check if any resources are currently locked.
+	for k := range locksToAcquire {
+		key := resourceKey(k)
+		if expiry, exists := l.locks[key]; exists && now.Before(time.Time(expiry)) {
+			return k, false // Resource is locked and lock is not expired.
+		}
+	}
+
+	// Acquire locks for all resources.
+	for k, timeout := range locksToAcquire {
+		key := resourceKey(k)
+		l.locks[key] = lockExpiry(now.Add(timeout))
+	}
+	return "", true
+}
+
+// release removes the locks for the given resource keys.
+func (l *locker) release(keysToRelease []string) {
+	if len(keysToRelease) == 0 {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	for _, k := range keysToRelease {
+		delete(l.locks, resourceKey(k))
+	}
+}
 
 // GuestActions is a struct that holds the state for guest actions.
 type GuestActions struct {
 	options Options
+	locker  *locker
 }
 
 // GuestActionHandler is a function that handles a guest action command.
@@ -68,6 +132,12 @@ type Options struct {
 	CloudProperties *metadataserver.CloudProperties
 	Handlers        map[string]GuestActionHandler
 	LROHandlers     map[string]GuestActionHandler
+	// CommandConcurrencyKey extracts a locking key from a command to prevent concurrent operations on the same resource (e.g., a specific database instance).
+	// Note: Returning an empty string as `key` with `ok=true` will acquire a lock on the empty string.
+	// This can lead to unintended contention if multiple distinct operations use an empty key.
+	// To avoid locking for a command, return `ok=false`.
+	// If timeout is 0 or negative, defaultLockTimeout is used.
+	CommandConcurrencyKey func(*gpb.Command) (string, time.Duration, bool)
 }
 
 func anyResponse(ctx context.Context, gar *gpb.GuestActionResponse) *anypb.Any {
@@ -187,7 +257,8 @@ func (g *GuestActions) processCommands(ctx context.Context, gar *gpb.GuestAction
 	return results, nil
 }
 
-func (g *GuestActions) executeAndSendDone(ctx context.Context, operationID string, gar *gpb.GuestActionRequest, conn *client.Connection, cloudProperties *metadataserver.CloudProperties) {
+func (g *GuestActions) executeAndSendDone(ctx context.Context, operationID string, gar *gpb.GuestActionRequest, conn *client.Connection, cloudProperties *metadataserver.CloudProperties, keysToRelease []string) {
+	defer g.locker.release(keysToRelease)
 	results, err := g.processCommands(ctx, gar, cloudProperties)
 	statusMsg := statusSucceeded
 	errMsg := ""
@@ -201,6 +272,38 @@ func (g *GuestActions) executeAndSendDone(ctx context.Context, operationID strin
 	if err != nil {
 		log.CtxLogger(ctx).Warnw("SendStatusMessage failed", "operation_id", operationID, "channel", g.options.Channel, "err", err)
 	}
+}
+
+// acquireLocksForRequest acquires locks for the commands in the request.
+// It returns the keys of the acquired locks and the key of the busy resource if any.
+// It returns true if all locks are acquired successfully, false otherwise.
+func (g *GuestActions) acquireLocksForRequest(ctx context.Context, gaReq *gpb.GuestActionRequest) ([]string, string, bool) {
+	if g.options.CommandConcurrencyKey == nil {
+		return []string{}, "", true
+	}
+	locksToAcquire := make(map[string]time.Duration)
+	for _, command := range gaReq.GetCommands() {
+		if key, timeout, ok := g.options.CommandConcurrencyKey(command); ok {
+			if timeout <= 0 {
+				timeout = defaultLockTimeout
+			}
+			// If multiple commands in a single GuestActionRequest proto need to lock the same key,
+			// we use the longest timeout to make sure the lock is held for the entire operation.
+			if existing, found := locksToAcquire[key]; !found || timeout > existing {
+				locksToAcquire[key] = timeout
+			}
+		}
+	}
+
+	if busyKey, ok := g.locker.acquire(locksToAcquire); !ok {
+		return nil, busyKey, false
+	}
+
+	keysToRelease := make([]string, 0, len(locksToAcquire))
+	for k := range locksToAcquire {
+		keysToRelease = append(keysToRelease, k)
+	}
+	return keysToRelease, "", true
 }
 
 func (g *GuestActions) isLRORequest(gaReq *gpb.GuestActionRequest) bool {
@@ -238,17 +341,34 @@ func (g *GuestActions) connectionHandler(ctx context.Context, msg *acpb.MessageB
 	}
 	log.CtxLogger(ctx).Debugw("Received GuestActionRequest", "operation_id", operationID, "channel", g.options.Channel, "request_msg", prototext.Format(gaReq))
 
+	keysToRelease, busyKey, ok := g.acquireLocksForRequest(ctx, gaReq)
+	if !ok {
+		log.CtxLogger(ctx).Warnw("Failed to acquire lock, resource busy", "busy_resource", busyKey)
+		errMsg := ""
+		if busyKey == "" {
+			errMsg = "Operation aborted. A resource with an empty-string lock key is busy"
+		} else {
+			errMsg = fmt.Sprintf("Operation aborted. Resource busy: %s", busyKey)
+		}
+		err := communication.SendStatusMessage(ctx, operationID, anyResponse(ctx, guestActionResponse(ctx, nil, errMsg)), statusFailed, lroStateDone, conn)
+		if err != nil {
+			return fmt.Errorf("failed to send status message: %v", err)
+		}
+		return nil
+	}
+
 	if g.isLRORequest(gaReq) {
 		// Send initial running status
 		err := communication.SendStatusMessage(ctx, operationID, anyResponse(ctx, guestActionResponse(ctx, nil, "")), statusRunning, lroStateRunning, conn)
 		if err != nil {
 			log.CtxLogger(ctx).Warnw("SendStatusMessage failed", "operation_id", operationID, "channel", g.options.Channel, "err", err)
+			g.locker.release(keysToRelease)
 			return err
 		}
 	}
 
 	// Process commands in background to avoid blocking the listener loop.
-	go g.executeAndSendDone(ctx, operationID, gaReq, conn, cloudProperties)
+	go g.executeAndSendDone(ctx, operationID, gaReq, conn, cloudProperties, keysToRelease)
 	return nil
 }
 
@@ -260,6 +380,7 @@ func (g *GuestActions) Start(ctx context.Context, a any) {
 		return
 	}
 	g.options = args
+	g.locker = newLocker()
 	endpoint := defaultEndpoint
 	if g.options.Endpoint != "" {
 		endpoint = g.options.Endpoint
