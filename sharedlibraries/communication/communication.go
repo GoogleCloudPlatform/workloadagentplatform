@@ -54,7 +54,8 @@ type (
 	ConnectionHandler func(context.Context, *acpb.MessageBody, *client.Connection, *metadataserver.CloudProperties) error
 )
 
-var sendMessage = func(c *client.Connection, msg *acpb.MessageBody) error {
+// SendMessage is a function that sends a message to ACS. It is exported for testing purposes.
+var SendMessage = func(c *client.Connection, msg *acpb.MessageBody) error {
 	return c.SendMessage(msg)
 }
 
@@ -79,7 +80,7 @@ func SendStatusMessage(ctx context.Context, operationID string, body *anypb.Any,
 	}
 	messageToSend := &acpb.MessageBody{Labels: labels, Body: body}
 	log.CtxLogger(ctx).Debugw("Sending status message via ACS", "messageToSend", messageToSend)
-	if err := sendMessage(conn, messageToSend); err != nil {
+	if err := SendMessage(conn, messageToSend); err != nil {
 		return fmt.Errorf("error sending status message via ACS: %v", err)
 	}
 	return nil
@@ -242,7 +243,7 @@ func SendAgentMessage(ctx context.Context, messageKey string, messageType string
 	}
 	messageToSend := &acpb.MessageBody{Labels: labels, Body: body}
 	log.CtxLogger(ctx).Debugw("Sending agent message via ACS", "messageToSend", messageToSend)
-	if err := sendMessage(conn, messageToSend); err != nil {
+	if err := SendMessage(conn, messageToSend); err != nil {
 		return fmt.Errorf("error sending agent message via ACS: %v", err)
 	}
 	return nil

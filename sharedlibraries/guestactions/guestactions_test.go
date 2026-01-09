@@ -20,15 +20,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"testing"
+	"time"
 
-	anypb "google.golang.org/protobuf/types/known/anypb"
+	"github.com/GoogleCloudPlatform/agentcommunication_client"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/testing/protocmp"
 	"github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries/commandlineexecutor"
+	"github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries/communication"
 	"github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries/gce/metadataserver"
 
+	anypb "google.golang.org/protobuf/types/known/anypb"
+	acpb "github.com/GoogleCloudPlatform/agentcommunication_client/gapic/agentcommunicationpb"
 	gpb "github.com/GoogleCloudPlatform/workloadagentplatform/sharedprotos/guestactions"
 )
 
@@ -428,6 +433,393 @@ func TestProcessCommands(t *testing.T) {
 
 			if diff := cmp.Diff(test.want, got, protocmp.Transform()); diff != "" {
 				t.Errorf("processCommands(%q) returned diff (-want +got):\n%s", test.name, diff)
+			}
+		})
+	}
+}
+
+func TestLockerAcquireAndRelease(t *testing.T) {
+	type stepAction int
+	const (
+		actionLock stepAction = iota
+		actionRelease
+		sleep
+	)
+	type step struct {
+		action      stepAction
+		acquireReq  map[string]time.Duration // for acquire action
+		releaseReq  []string                 // for release action
+		wantAcquire bool                     // for acquire action
+		wantBusyKey string                   // for acquire action
+		duration    time.Duration            // for sleep action
+	}
+	tests := []struct {
+		name  string
+		steps []step
+	}{
+		{
+			name: "single key",
+			steps: []step{
+				{action: actionLock, acquireReq: map[string]time.Duration{"a": defaultLockTimeout}, wantAcquire: true, wantBusyKey: ""},
+				{action: actionLock, acquireReq: map[string]time.Duration{"a": defaultLockTimeout}, wantAcquire: false, wantBusyKey: "a"},
+				{action: actionRelease, releaseReq: []string{"a"}},
+				{action: actionLock, acquireReq: map[string]time.Duration{"a": defaultLockTimeout}, wantAcquire: true, wantBusyKey: ""},
+				{action: actionRelease, releaseReq: []string{"a"}},
+			},
+		},
+		{
+			name: "multiple keys",
+			steps: []step{
+				{action: actionLock, acquireReq: map[string]time.Duration{"a": defaultLockTimeout, "b": defaultLockTimeout}, wantAcquire: true, wantBusyKey: ""},
+				{action: actionLock, acquireReq: map[string]time.Duration{"a": defaultLockTimeout}, wantAcquire: false, wantBusyKey: "a"},
+				{action: actionLock, acquireReq: map[string]time.Duration{"b": defaultLockTimeout}, wantAcquire: false, wantBusyKey: "b"},
+				{action: actionLock, acquireReq: map[string]time.Duration{"c": defaultLockTimeout}, wantAcquire: true, wantBusyKey: ""},
+				{action: actionRelease, releaseReq: []string{"b"}},
+				{action: actionLock, acquireReq: map[string]time.Duration{"a": defaultLockTimeout}, wantAcquire: false, wantBusyKey: "a"},
+				{action: actionLock, acquireReq: map[string]time.Duration{"b": defaultLockTimeout}, wantAcquire: true, wantBusyKey: ""},
+				{action: actionRelease, releaseReq: []string{"a", "b", "c"}},
+			},
+		},
+		{
+			name: "intersecting keys",
+			steps: []step{
+				{action: actionLock, acquireReq: map[string]time.Duration{"a": defaultLockTimeout}, wantAcquire: true, wantBusyKey: ""},
+				{action: actionLock, acquireReq: map[string]time.Duration{"a": defaultLockTimeout, "b": defaultLockTimeout}, wantAcquire: false, wantBusyKey: "a"},
+				{action: actionRelease, releaseReq: []string{"a"}},
+				{action: actionLock, acquireReq: map[string]time.Duration{"a": defaultLockTimeout, "b": defaultLockTimeout}, wantAcquire: true, wantBusyKey: ""},
+				{action: actionRelease, releaseReq: []string{"a", "b"}},
+			},
+		},
+		{
+			name: "no keys",
+			steps: []step{
+				{action: actionLock, acquireReq: map[string]time.Duration{}, wantAcquire: true, wantBusyKey: ""},
+				{action: actionRelease, releaseReq: []string{}},
+				{action: actionLock, acquireReq: map[string]time.Duration{}, wantAcquire: true, wantBusyKey: ""},
+			},
+		},
+		{
+			name: "empty string key",
+			steps: []step{
+				{action: actionLock, acquireReq: map[string]time.Duration{"": defaultLockTimeout}, wantAcquire: true, wantBusyKey: ""},
+				{action: actionLock, acquireReq: map[string]time.Duration{"": defaultLockTimeout}, wantAcquire: false, wantBusyKey: ""},
+				{action: actionRelease, releaseReq: []string{""}},
+				{action: actionLock, acquireReq: map[string]time.Duration{"": defaultLockTimeout}, wantAcquire: true, wantBusyKey: ""},
+				{action: actionRelease, releaseReq: []string{""}},
+			},
+		},
+		{
+			name: "lock expires",
+			steps: []step{
+				{action: actionLock, acquireReq: map[string]time.Duration{"a": 1 * time.Millisecond}, wantAcquire: true, wantBusyKey: ""},
+				{action: actionLock, acquireReq: map[string]time.Duration{"a": 1 * time.Millisecond}, wantAcquire: false, wantBusyKey: "a"},
+				{action: sleep, duration: 2 * time.Millisecond},
+				{action: actionLock, acquireReq: map[string]time.Duration{"a": 1 * time.Millisecond}, wantAcquire: true, wantBusyKey: ""},
+				{action: actionRelease, releaseReq: []string{"a"}},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			l := newLocker()
+			for i, step := range tc.steps {
+				switch step.action {
+				case actionLock:
+					if key, ok := l.acquire(ctx, step.acquireReq); ok != step.wantAcquire || key != step.wantBusyKey {
+						t.Errorf("Step %d: Acquire(%v) = (%q, %v), want: (%q, %v)", i, step.acquireReq, key, ok, step.wantBusyKey, step.wantAcquire)
+					}
+				case actionRelease:
+					l.release(step.releaseReq)
+				case sleep:
+					time.Sleep(step.duration)
+				}
+			}
+		})
+	}
+}
+
+func TestAcquireLocksForRequest(t *testing.T) {
+	tests := []struct {
+		name               string
+		request            *gpb.GuestActionRequest
+		concurrencyKeyFunc func(*gpb.Command) (string, time.Duration, bool)
+		wantKeys           []string
+		wantBusyKey        string
+		wantOk             bool
+		existingLocks      map[string]time.Duration
+	}{
+		{
+			name:    "NoCommands",
+			request: &gpb.GuestActionRequest{},
+			concurrencyKeyFunc: func(*gpb.Command) (string, time.Duration, bool) {
+				return "key", defaultLockTimeout, true
+			},
+			wantKeys: []string{},
+			wantOk:   true,
+		},
+		{
+			name: "NoConcurrencyKeyFunc",
+			request: &gpb.GuestActionRequest{
+				Commands: []*gpb.Command{
+					{
+						CommandType: &gpb.Command_AgentCommand{
+							AgentCommand: &gpb.AgentCommand{Command: "cmd1"},
+						},
+					},
+				},
+			},
+			concurrencyKeyFunc: nil,
+			wantKeys:           []string{},
+			wantOk:             true,
+		},
+		{
+			name: "ConcurrencyKeyFuncReturnsFalse",
+			request: &gpb.GuestActionRequest{
+				Commands: []*gpb.Command{
+					{
+						CommandType: &gpb.Command_AgentCommand{
+							AgentCommand: &gpb.AgentCommand{Command: "cmd1"},
+						},
+					},
+				},
+			},
+			concurrencyKeyFunc: func(*gpb.Command) (string, time.Duration, bool) {
+				return "", 0, false
+			},
+			wantKeys: []string{},
+			wantOk:   true,
+		},
+		{
+			name: "SingleCommandLockSuccess",
+			request: &gpb.GuestActionRequest{
+				Commands: []*gpb.Command{
+					{
+						CommandType: &gpb.Command_AgentCommand{
+							AgentCommand: &gpb.AgentCommand{Command: "cmd1"},
+						},
+					},
+				},
+			},
+			concurrencyKeyFunc: func(*gpb.Command) (string, time.Duration, bool) {
+				return "key1", defaultLockTimeout, true
+			},
+			wantKeys: []string{"key1"},
+			wantOk:   true,
+		},
+		{
+			name: "SingleCommandLockFailed",
+			request: &gpb.GuestActionRequest{
+				Commands: []*gpb.Command{
+					{
+						CommandType: &gpb.Command_AgentCommand{
+							AgentCommand: &gpb.AgentCommand{Command: "cmd1"},
+						},
+					},
+				},
+			},
+			concurrencyKeyFunc: func(*gpb.Command) (string, time.Duration, bool) {
+				return "key1", defaultLockTimeout, true
+			},
+			existingLocks: map[string]time.Duration{"key1": defaultLockTimeout},
+			wantBusyKey:   "key1",
+			wantOk:        false,
+		},
+		{
+			name: "MultipleCommandsSameKeyLockSuccess",
+			request: &gpb.GuestActionRequest{
+				Commands: []*gpb.Command{
+					{
+						CommandType: &gpb.Command_AgentCommand{
+							AgentCommand: &gpb.AgentCommand{Command: "cmd1"},
+						},
+					},
+					{
+						CommandType: &gpb.Command_AgentCommand{
+							AgentCommand: &gpb.AgentCommand{Command: "cmd2"},
+						},
+					},
+				},
+			},
+			concurrencyKeyFunc: func(c *gpb.Command) (string, time.Duration, bool) {
+				if c.GetAgentCommand().GetCommand() == "cmd1" {
+					return "key1", 1 * time.Minute, true
+				}
+				return "key1", 2 * time.Minute, true
+			},
+			wantKeys: []string{"key1"},
+			wantOk:   true,
+		},
+		{
+			name: "MultipleCommandsDifferentKeysLockSuccess",
+			request: &gpb.GuestActionRequest{
+				Commands: []*gpb.Command{
+					{
+						CommandType: &gpb.Command_AgentCommand{
+							AgentCommand: &gpb.AgentCommand{Command: "cmd1"},
+						},
+					},
+					{
+						CommandType: &gpb.Command_AgentCommand{
+							AgentCommand: &gpb.AgentCommand{Command: "cmd2"},
+						},
+					},
+				},
+			},
+			concurrencyKeyFunc: func(c *gpb.Command) (string, time.Duration, bool) {
+				if c.GetAgentCommand().GetCommand() == "cmd1" {
+					return "key1", 0, true
+				}
+				return "key2", 0, true
+			},
+			wantKeys: []string{"key1", "key2"},
+			wantOk:   true,
+		},
+		{
+			name: "MultipleCommandsOneKeyLocked",
+			request: &gpb.GuestActionRequest{
+				Commands: []*gpb.Command{
+					{
+						CommandType: &gpb.Command_AgentCommand{
+							AgentCommand: &gpb.AgentCommand{Command: "cmd1"},
+						},
+					},
+					{
+						CommandType: &gpb.Command_AgentCommand{
+							AgentCommand: &gpb.AgentCommand{Command: "cmd2"},
+						},
+					},
+				},
+			},
+			concurrencyKeyFunc: func(c *gpb.Command) (string, time.Duration, bool) {
+				if c.GetAgentCommand().GetCommand() == "cmd1" {
+					return "key1", 0, true
+				}
+				return "key2", 0, true
+			},
+			existingLocks: map[string]time.Duration{"key2": defaultLockTimeout},
+			wantBusyKey:   "key2",
+			wantOk:        false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			g := &GuestActions{
+				options: Options{
+					CommandConcurrencyKey: tc.concurrencyKeyFunc,
+				},
+				locker: newLocker(),
+			}
+			if tc.existingLocks != nil {
+				g.locker.acquire(ctx, tc.existingLocks)
+			}
+
+			keys, busyKey, ok := g.acquireLocksForRequest(ctx, tc.request)
+
+			if ok != tc.wantOk {
+				t.Errorf("acquireLocksForRequest() ok = %v, want %v", ok, tc.wantOk)
+			}
+			if busyKey != tc.wantBusyKey {
+				t.Errorf("acquireLocksForRequest() busyKey = %q, want %q", busyKey, tc.wantBusyKey)
+			}
+
+			// Sort keys for consistent comparison
+			sort.Strings(keys)
+			sort.Strings(tc.wantKeys)
+			if diff := cmp.Diff(tc.wantKeys, keys); diff != "" {
+				t.Errorf("acquireLocksForRequest() keys returned diff (-want +got):\n%s", diff)
+			}
+			if !tc.wantOk && len(g.locker.locks) != len(tc.existingLocks) {
+				t.Errorf("acquireLocksForRequest() should not acquire new locks on failure, got %d locks, want %d", len(g.locker.locks), len(tc.existingLocks))
+			}
+		})
+	}
+}
+
+func TestExecuteAndSendDone(t *testing.T) {
+	tests := []struct {
+		name         string
+		request      *gpb.GuestActionRequest
+		wantStatus   string
+		wantExitCode int32
+	}{
+		{
+			name: "Success",
+			request: &gpb.GuestActionRequest{
+				Commands: []*gpb.Command{
+					{
+						CommandType: &gpb.Command_ShellCommand{
+							ShellCommand: &gpb.ShellCommand{Command: "echo", Args: "Hello World!"},
+						},
+					},
+				},
+			},
+			wantStatus:   statusSucceeded,
+			wantExitCode: 0,
+		},
+		{
+			name: "Failure",
+			request: &gpb.GuestActionRequest{
+				Commands: []*gpb.Command{
+					{
+						CommandType: &gpb.Command_ShellCommand{
+							ShellCommand: &gpb.ShellCommand{Command: "eecho", Args: "Hello World!"},
+						},
+					},
+				},
+			},
+			wantStatus:   statusFailed,
+			wantExitCode: 1,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			g := &GuestActions{
+				options: Options{
+					Handlers: testHandlers,
+				},
+				locker: newLocker(),
+			}
+			locks := map[string]time.Duration{"test-key": 1 * time.Minute}
+			if _, ok := g.locker.acquire(ctx, locks); !ok {
+				t.Fatalf("Acquire(%v) failed", locks)
+			}
+
+			var gotMsg *acpb.MessageBody
+			origSendMessage := communication.SendMessage
+			defer func() { communication.SendMessage = origSendMessage }()
+			communication.SendMessage = func(c *client.Connection, msg *acpb.MessageBody) error {
+				gotMsg = msg
+				return nil
+			}
+
+			g.executeAndSendDone(ctx, "op1", tc.request, nil, nil, []string{"test-key"})
+
+			if gotMsg == nil {
+				t.Fatalf("executeAndSendDone() did not send message")
+			}
+			if gotMsg.Labels["state"] != tc.wantStatus {
+				t.Errorf("executeAndSendDone() sent status %q, want %q", gotMsg.Labels["state"], tc.wantStatus)
+			}
+			resp := &gpb.GuestActionResponse{}
+			if err := gotMsg.GetBody().UnmarshalTo(resp); err != nil {
+				t.Fatalf("Failed to unmarshal response: %v", err)
+			}
+			if len(resp.GetCommandResults()) != 1 {
+				t.Fatalf("executeAndSendDone() returned %d command results, want 1", len(resp.GetCommandResults()))
+			}
+			if resp.GetCommandResults()[0].GetExitCode() != tc.wantExitCode {
+				t.Errorf("executeAndSendDone() returned exit code %d, want %d", resp.GetCommandResults()[0].GetExitCode(), tc.wantExitCode)
+			}
+
+			// Verify lock is released
+			if key, ok := g.locker.acquire(ctx, locks); !ok {
+				t.Errorf("Acquire(%v) failed after executeAndSendDone(), want success, locked by %s", locks, key)
 			}
 		})
 	}

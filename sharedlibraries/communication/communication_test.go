@@ -151,19 +151,19 @@ func TestSendStatusMessage(t *testing.T) {
 	tests := []struct {
 		name        string
 		want        error
-		sendMessage func(c *client.Connection, msg *acpb.MessageBody) error
+		SendMessage func(c *client.Connection, msg *acpb.MessageBody) error
 	}{
 		{
 			name: "typical",
 			want: nil,
-			sendMessage: func(c *client.Connection, msg *acpb.MessageBody) error {
+			SendMessage: func(c *client.Connection, msg *acpb.MessageBody) error {
 				return nil
 			},
 		},
 		{
 			name: "errorSendingMessage",
 			want: cmpopts.AnyError,
-			sendMessage: func(c *client.Connection, msg *acpb.MessageBody) error {
+			SendMessage: func(c *client.Connection, msg *acpb.MessageBody) error {
 				return fmt.Errorf("test error")
 			},
 		},
@@ -173,7 +173,9 @@ func TestSendStatusMessage(t *testing.T) {
 	conn := &client.Connection{}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			sendMessage = test.sendMessage
+			origSendMessage := SendMessage
+			defer func() { SendMessage = origSendMessage }()
+			SendMessage = test.SendMessage
 			got := SendStatusMessage(ctx, "operationID", &apb.Any{Value: []byte("test status body")}, "status", "lroState", conn)
 			if diff := cmp.Diff(test.want, got, cmpopts.EquateErrors()); diff != "" {
 				t.Errorf("SendStatusMessage() returned diff (-want +got):\n%s", diff)
@@ -255,7 +257,7 @@ func TestCommunicate(t *testing.T) {
 		name             string
 		want             string
 		createConnection func(ctx context.Context, channel string, regional bool, opts ...option.ClientOption) (*client.Connection, error)
-		sendMessage      func(c *client.Connection, msg *acpb.MessageBody) error
+		SendMessage      func(c *client.Connection, msg *acpb.MessageBody) error
 		receive          func(c *client.Connection) (*acpb.MessageBody, error)
 	}{
 		{
@@ -264,7 +266,7 @@ func TestCommunicate(t *testing.T) {
 			createConnection: func(ctx context.Context, channel string, regional bool, opts ...option.ClientOption) (*client.Connection, error) {
 				return &client.Connection{}, nil
 			},
-			sendMessage: func(c *client.Connection, msg *acpb.MessageBody) error {
+			SendMessage: func(c *client.Connection, msg *acpb.MessageBody) error {
 				return nil
 			},
 			receive: func(c *client.Connection) (*acpb.MessageBody, error) {
@@ -289,7 +291,7 @@ func TestCommunicate(t *testing.T) {
 			createConnection: func(ctx context.Context, channel string, regional bool, opts ...option.ClientOption) (*client.Connection, error) {
 				return &client.Connection{}, nil
 			},
-			sendMessage: func(c *client.Connection, msg *acpb.MessageBody) error {
+			SendMessage: func(c *client.Connection, msg *acpb.MessageBody) error {
 				return fmt.Errorf("sendMessage error")
 			},
 			receive: func(c *client.Connection) (*acpb.MessageBody, error) {
@@ -314,7 +316,7 @@ func TestCommunicate(t *testing.T) {
 			createConnection: func(ctx context.Context, channel string, regional bool, opts ...option.ClientOption) (*client.Connection, error) {
 				return &client.Connection{}, nil
 			},
-			sendMessage: func(c *client.Connection, msg *acpb.MessageBody) error {
+			SendMessage: func(c *client.Connection, msg *acpb.MessageBody) error {
 				return nil
 			},
 			receive: func(c *client.Connection) (*acpb.MessageBody, error) {
@@ -328,7 +330,7 @@ func TestCommunicate(t *testing.T) {
 			createConnection: func(ctx context.Context, channel string, regional bool, opts ...option.ClientOption) (*client.Connection, error) {
 				return &client.Connection{}, nil
 			},
-			sendMessage: func(c *client.Connection, msg *acpb.MessageBody) error {
+			SendMessage: func(c *client.Connection, msg *acpb.MessageBody) error {
 				return nil
 			},
 			receive: func(c *client.Connection) (*acpb.MessageBody, error) {
@@ -343,7 +345,9 @@ func TestCommunicate(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			createConnection = test.createConnection
-			sendMessage = test.sendMessage
+			origSendMessage := SendMessage
+			defer func() { SendMessage = origSendMessage }()
+			SendMessage = test.SendMessage
 			receive = test.receive
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
@@ -459,26 +463,28 @@ func TestSendAgentMessage(t *testing.T) {
 	tests := []struct {
 		name        string
 		want        error
-		sendMessage func(c *client.Connection, msg *acpb.MessageBody) error
+		SendMessage func(c *client.Connection, msg *acpb.MessageBody) error
 	}{
 		{
 			name: "typical",
 			want: nil,
-			sendMessage: func(c *client.Connection, msg *acpb.MessageBody) error {
+			SendMessage: func(c *client.Connection, msg *acpb.MessageBody) error {
 				return nil
 			},
 		},
 		{
 			name: "errorSendingMessage",
 			want: cmpopts.AnyError,
-			sendMessage: func(c *client.Connection, msg *acpb.MessageBody) error {
+			SendMessage: func(c *client.Connection, msg *acpb.MessageBody) error {
 				return fmt.Errorf("sendMessage error")
 			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			sendMessage = test.sendMessage
+			origSendMessage := SendMessage
+			defer func() { SendMessage = origSendMessage }()
+			SendMessage = test.SendMessage
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
 			got := SendAgentMessage(ctx, "messageKey", "MessageType", &apb.Any{Value: []byte("test body")}, &client.Connection{})
