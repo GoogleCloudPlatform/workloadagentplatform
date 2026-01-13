@@ -544,7 +544,7 @@ func TestAcquireLocksForRequest(t *testing.T) {
 	tests := []struct {
 		name               string
 		request            *gpb.GuestActionRequest
-		concurrencyKeyFunc func(*gpb.Command) (string, time.Duration, bool)
+		concurrencyKeyFunc func(context.Context, *gpb.Command, *metadataserver.CloudProperties) (string, time.Duration, bool)
 		wantKeys           []string
 		wantBusyKey        string
 		wantOk             bool
@@ -553,7 +553,7 @@ func TestAcquireLocksForRequest(t *testing.T) {
 		{
 			name:    "NoCommands",
 			request: &gpb.GuestActionRequest{},
-			concurrencyKeyFunc: func(*gpb.Command) (string, time.Duration, bool) {
+			concurrencyKeyFunc: func(context.Context, *gpb.Command, *metadataserver.CloudProperties) (string, time.Duration, bool) {
 				return "key", defaultLockTimeout, true
 			},
 			wantKeys: []string{},
@@ -585,7 +585,7 @@ func TestAcquireLocksForRequest(t *testing.T) {
 					},
 				},
 			},
-			concurrencyKeyFunc: func(*gpb.Command) (string, time.Duration, bool) {
+			concurrencyKeyFunc: func(context.Context, *gpb.Command, *metadataserver.CloudProperties) (string, time.Duration, bool) {
 				return "", 0, false
 			},
 			wantKeys: []string{},
@@ -602,7 +602,7 @@ func TestAcquireLocksForRequest(t *testing.T) {
 					},
 				},
 			},
-			concurrencyKeyFunc: func(*gpb.Command) (string, time.Duration, bool) {
+			concurrencyKeyFunc: func(context.Context, *gpb.Command, *metadataserver.CloudProperties) (string, time.Duration, bool) {
 				return "key1", defaultLockTimeout, true
 			},
 			wantKeys: []string{"key1"},
@@ -619,7 +619,7 @@ func TestAcquireLocksForRequest(t *testing.T) {
 					},
 				},
 			},
-			concurrencyKeyFunc: func(*gpb.Command) (string, time.Duration, bool) {
+			concurrencyKeyFunc: func(context.Context, *gpb.Command, *metadataserver.CloudProperties) (string, time.Duration, bool) {
 				return "key1", defaultLockTimeout, true
 			},
 			existingLocks: map[string]time.Duration{"key1": defaultLockTimeout},
@@ -642,7 +642,7 @@ func TestAcquireLocksForRequest(t *testing.T) {
 					},
 				},
 			},
-			concurrencyKeyFunc: func(c *gpb.Command) (string, time.Duration, bool) {
+			concurrencyKeyFunc: func(_ context.Context, c *gpb.Command, _ *metadataserver.CloudProperties) (string, time.Duration, bool) {
 				if c.GetAgentCommand().GetCommand() == "cmd1" {
 					return "key1", 1 * time.Minute, true
 				}
@@ -667,7 +667,7 @@ func TestAcquireLocksForRequest(t *testing.T) {
 					},
 				},
 			},
-			concurrencyKeyFunc: func(c *gpb.Command) (string, time.Duration, bool) {
+			concurrencyKeyFunc: func(_ context.Context, c *gpb.Command, _ *metadataserver.CloudProperties) (string, time.Duration, bool) {
 				if c.GetAgentCommand().GetCommand() == "cmd1" {
 					return "key1", 0, true
 				}
@@ -692,7 +692,7 @@ func TestAcquireLocksForRequest(t *testing.T) {
 					},
 				},
 			},
-			concurrencyKeyFunc: func(c *gpb.Command) (string, time.Duration, bool) {
+			concurrencyKeyFunc: func(_ context.Context, c *gpb.Command, _ *metadataserver.CloudProperties) (string, time.Duration, bool) {
 				if c.GetAgentCommand().GetCommand() == "cmd1" {
 					return "key1", 0, true
 				}
@@ -717,7 +717,7 @@ func TestAcquireLocksForRequest(t *testing.T) {
 				g.locker.acquire(ctx, tc.existingLocks)
 			}
 
-			keys, busyKey, ok := g.acquireLocksForRequest(ctx, tc.request)
+			keys, busyKey, ok := g.acquireLocksForRequest(ctx, tc.request, nil)
 
 			if ok != tc.wantOk {
 				t.Errorf("acquireLocksForRequest() ok = %v, want %v", ok, tc.wantOk)

@@ -140,7 +140,7 @@ type Options struct {
 	// This can lead to unintended contention if multiple distinct operations use an empty key.
 	// To avoid locking for a command, return `ok=false`.
 	// If timeout is 0 or negative, defaultLockTimeout is used.
-	CommandConcurrencyKey func(*gpb.Command) (string, time.Duration, bool)
+	CommandConcurrencyKey func(context.Context, *gpb.Command, *metadataserver.CloudProperties) (string, time.Duration, bool)
 }
 
 func anyResponse(ctx context.Context, gar *gpb.GuestActionResponse) *anypb.Any {
@@ -280,13 +280,13 @@ func (g *GuestActions) executeAndSendDone(ctx context.Context, operationID strin
 // acquireLocksForRequest acquires locks for the commands in the request.
 // It returns the keys of the acquired locks and the key of the busy resource if any.
 // It returns true if all locks are acquired successfully, false otherwise.
-func (g *GuestActions) acquireLocksForRequest(ctx context.Context, gaReq *gpb.GuestActionRequest) ([]string, string, bool) {
+func (g *GuestActions) acquireLocksForRequest(ctx context.Context, gaReq *gpb.GuestActionRequest, cloudProperties *metadataserver.CloudProperties) ([]string, string, bool) {
 	if g.options.CommandConcurrencyKey == nil {
 		return []string{}, "", true
 	}
 	locksToAcquire := make(map[string]time.Duration)
 	for _, command := range gaReq.GetCommands() {
-		if key, timeout, ok := g.options.CommandConcurrencyKey(command); ok {
+		if key, timeout, ok := g.options.CommandConcurrencyKey(ctx, command, cloudProperties); ok {
 			if timeout <= 0 {
 				timeout = defaultLockTimeout
 			}
@@ -344,7 +344,7 @@ func (g *GuestActions) connectionHandler(ctx context.Context, msg *acpb.MessageB
 	}
 	log.CtxLogger(ctx).Debugw("Received GuestActionRequest", "operation_id", operationID, "channel", g.options.Channel, "request_msg", prototext.Format(gaReq))
 
-	keysToRelease, busyKey, ok := g.acquireLocksForRequest(ctx, gaReq)
+	keysToRelease, busyKey, ok := g.acquireLocksForRequest(ctx, gaReq, cloudProperties)
 	if !ok {
 		log.CtxLogger(ctx).Warnw("Failed to acquire lock, resource busy", "busy_resource", busyKey)
 		errMsg := ""
