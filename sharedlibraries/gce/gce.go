@@ -282,8 +282,8 @@ func (g *GCE) waitForSnapshotCreationCompletion(ctx context.Context, op *compute
 // WaitForSnapshotCreationCompletionWithRetry waits for the given compute operation to complete.
 // We sleep for 1s between retries a total 300 times => max_wait_duration = 5 minutes
 func (g *GCE) WaitForSnapshotCreationCompletionWithRetry(ctx context.Context, op *compute.Operation, project, diskZone, snapshotName string) error {
-	constantBackoff := backoff.NewConstantBackOff(1 * time.Second)
-	bo := backoff.WithContext(backoff.WithMaxRetries(constantBackoff, 300), ctx)
+	interval := backoff.NewConstantBackOff(1 * time.Second)
+	bo := backoff.WithContext(backoff.WithMaxRetries(interval, 300), ctx)
 	return backoff.Retry(func() error { return g.waitForSnapshotCreationCompletion(ctx, op, project, snapshotName) }, bo)
 }
 
@@ -323,8 +323,8 @@ func (g *GCE) waitForUploadCompletion(ctx context.Context, op *compute.Operation
 // WaitForSnapshotUploadCompletionWithRetry waits for the given compute operation to complete.
 // We sleep for 30s between retries a total 480 times => max_wait_duration = 30*480 = 4 Hours
 func (g *GCE) WaitForSnapshotUploadCompletionWithRetry(ctx context.Context, op *compute.Operation, project, diskZone, snapshotName string) error {
-	constantBackoff := backoff.NewConstantBackOff(30 * time.Second)
-	bo := backoff.WithContext(backoff.WithMaxRetries(constantBackoff, 480), ctx)
+	interval := backoff.NewConstantBackOff(30 * time.Second)
+	bo := backoff.WithContext(backoff.WithMaxRetries(interval, 480), ctx)
 	return backoff.Retry(func() error { return g.waitForUploadCompletion(ctx, op, project, diskZone, snapshotName) }, bo)
 }
 
@@ -353,8 +353,8 @@ func (g *GCE) waitForDiskOpCompletion(ctx context.Context, op *compute.Operation
 // WaitForDiskOpCompletionWithRetry waits for the given compute operation to complete.
 // We sleep for 120s between retries a total 10 times => max_wait_duration = 10*120 = 20 Minutes
 func (g *GCE) WaitForDiskOpCompletionWithRetry(ctx context.Context, op *compute.Operation, project, dataDiskZone string) error {
-	constantBackoff := backoff.NewConstantBackOff(120 * time.Second)
-	bo := backoff.WithContext(backoff.WithMaxRetries(constantBackoff, 10), ctx)
+	interval := backoff.NewConstantBackOff(120 * time.Second)
+	bo := backoff.WithContext(backoff.WithMaxRetries(interval, 10), ctx)
 	return backoff.Retry(func() error { return g.waitForDiskOpCompletion(ctx, op, project, dataDiskZone) }, bo)
 }
 
@@ -434,6 +434,33 @@ func (g *GCE) ListSnapshots(ctx context.Context, project string) (*compute.Snaps
 	return finalSnapshotList, nil
 }
 
+// UpdateSnapshotLabels sets the labels for a given snapshot.
+func (g *GCE) UpdateSnapshotLabels(ctx context.Context, project, snapshotName string, labels map[string]string) error {
+	snapshotsService := compute.NewSnapshotsService(g.service)
+	// Get the current snapshot to get the label fingerprint.
+	snapshot, err := snapshotsService.Get(project, snapshotName).Do()
+	if err != nil {
+		return err
+	}
+	labelFingerprint := snapshot.LabelFingerprint
+	if labelFingerprint == "" {
+		return fmt.Errorf("snapshot %s does not have a label fingerprint", snapshotName)
+	}
+
+	op, err := snapshotsService.SetLabels(project, snapshotName, &compute.GlobalSetLabelsRequest{
+		LabelFingerprint: labelFingerprint,
+		Labels:           labels,
+	}).Do()
+	if err != nil {
+		return err
+	}
+
+	if err := g.waitForGlobalOperationCompletionWithRetry(ctx, op, project); err != nil {
+		return err
+	}
+	return nil
+}
+
 // AddResourcePolicies adds the given resource policies of a disk.
 func (g *GCE) AddResourcePolicies(ctx context.Context, project, zone, diskName string, resourcePolicies []string) (*compute.Operation, error) {
 	disksService := compute.NewDisksService(g.service)
@@ -454,8 +481,8 @@ func (g *GCE) RemoveResourcePolicies(ctx context.Context, project, zone, diskNam
 	return op, nil
 }
 
-// SetLabels sets the labels for a given disk.
-func (g *GCE) SetLabels(ctx context.Context, project, zone, diskName, labelFingerprint string, labels map[string]string) (*compute.Operation, error) {
+// UpdateLabels sets the labels for a given disk.
+func (g *GCE) UpdateLabels(ctx context.Context, project, zone, diskName, labelFingerprint string, labels map[string]string) (*compute.Operation, error) {
 	disksService := compute.NewDisksService(g.service)
 	op, err := disksService.SetLabels(project, zone, diskName, &compute.ZoneSetLabelsRequest{
 		Labels:           labels,
@@ -467,8 +494,8 @@ func (g *GCE) SetLabels(ctx context.Context, project, zone, diskName, labelFinge
 	return op, nil
 }
 
-// waitForGlobalUploadCompletion waits for the given snapshot upload operation to complete.
-func (g *GCE) waitForGlobalUploadCompletion(ctx context.Context, op *compute.Operation, project, diskZone, snapshotName string) error {
+// waitForGlobalOperationCompletion waits for the given global operation to complete.
+func (g *GCE) waitForGlobalOperationCompletion(ctx context.Context, op *compute.Operation, project string) error {
 	gos := compute.NewGlobalOperationsService(g.service)
 	tracker, err := gos.Wait(project, op.Name).Do()
 	if err != nil {
@@ -487,6 +514,21 @@ func (g *GCE) waitForGlobalUploadCompletion(ctx context.Context, op *compute.Ope
 		log.CtxLogger(ctx).Errorw("Error in operation", "operation", op.Name, "errorStatusCode", tracker.HttpErrorStatusCode, "error", tracker.HttpErrorMessage)
 		return fmt.Errorf("compute operation failed with error: %v", tracker.HttpErrorMessage)
 	}
+	return nil
+}
+
+// waitForGlobalOperationCompletionWithRetry waits for the given global operation to complete.
+func (g *GCE) waitForGlobalOperationCompletionWithRetry(ctx context.Context, op *compute.Operation, project string) error {
+	interval := backoff.NewConstantBackOff(1 * time.Second)
+	bo := backoff.WithContext(backoff.WithMaxRetries(interval, 300), ctx)
+	return backoff.Retry(func() error { return g.waitForGlobalOperationCompletion(ctx, op, project) }, bo)
+}
+
+// waitForGlobalUploadCompletion waits for the given snapshot upload operation to complete.
+func (g *GCE) waitForGlobalUploadCompletion(ctx context.Context, op *compute.Operation, project, diskZone, snapshotName string) error {
+	if err := g.waitForGlobalOperationCompletion(ctx, op, project); err != nil {
+		return err
+	}
 
 	ss, err := g.service.Snapshots.Get(project, snapshotName).Do()
 	if err != nil {
@@ -503,8 +545,8 @@ func (g *GCE) waitForGlobalUploadCompletion(ctx context.Context, op *compute.Ope
 // WaitForInstantSnapshotConversionCompletionWithRetry waits for the given compute operation to complete.
 // We sleep for 30s between retries a total 480 times => max_wait_duration = 30*480 = 4 Hours
 func (g *GCE) WaitForInstantSnapshotConversionCompletionWithRetry(ctx context.Context, op *compute.Operation, project, diskZone, snapshotName string) error {
-	constantBackoff := backoff.NewConstantBackOff(30 * time.Second)
-	bo := backoff.WithContext(backoff.WithMaxRetries(constantBackoff, 480), ctx)
+	interval := backoff.NewConstantBackOff(30 * time.Second)
+	bo := backoff.WithContext(backoff.WithMaxRetries(interval, 480), ctx)
 	return backoff.Retry(func() error { return g.waitForGlobalUploadCompletion(ctx, op, project, diskZone, snapshotName) }, bo)
 }
 
