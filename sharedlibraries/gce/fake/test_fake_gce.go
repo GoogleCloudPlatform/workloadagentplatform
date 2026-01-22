@@ -130,8 +130,8 @@ type TestGCE struct {
 	RemoveResourcePoliciesOp  *compute.Operation
 	RemoveResourcePoliciesErr error
 
-	SetLabelsOp  *compute.Operation
-	SetLabelsErr error
+	UpdateLabelsOp  *compute.Operation
+	UpdateLabelsErr error
 
 	InstantSnapshotConversionCompletionErr error
 
@@ -142,6 +142,8 @@ type TestGCE struct {
 	GetSubnetworkResp      []*compute.Subnetwork
 	GetSubnetworkErr       []error
 	GetSubnetworkCallCount int
+
+	UpdateSnapshotLabelsErr error
 }
 
 // GetInstance fakes a call to the compute API to retrieve a GCE Instance.
@@ -405,9 +407,9 @@ func (g *TestGCE) RemoveResourcePolicies(ctx context.Context, project, zone, dis
 	return g.RemoveResourcePoliciesOp, g.RemoveResourcePoliciesErr
 }
 
-// SetLabels fakes calls to the cloud APIs to set labels on a disk.
-func (g *TestGCE) SetLabels(ctx context.Context, project, zone, diskName, labelFingerprint string, labels map[string]string) (*compute.Operation, error) {
-	return g.SetLabelsOp, g.SetLabelsErr
+// UpdateLabels fakes calls to the cloud APIs to set labels on a disk.
+func (g *TestGCE) UpdateLabels(ctx context.Context, project, zone, diskName, labelFingerprint string, labels map[string]string) (*compute.Operation, error) {
+	return g.UpdateLabelsOp, g.UpdateLabelsErr
 }
 
 // WaitForInstantSnapshotConversionCompletionWithRetry fakes calls to the cloud APIs to wait for an instant snapshot conversion operation to complete.
@@ -435,4 +437,9 @@ func (g *TestGCE) GetSubnetwork(name, project, region string) (*compute.Subnetwo
 		}
 	}()
 	return g.GetSubnetworkResp[g.GetSubnetworkCallCount], g.GetSubnetworkErr[g.GetSubnetworkCallCount]
+}
+
+// UpdateSnapshotLabels is a fake implementation of the gceInterface method.
+func (g *TestGCE) UpdateSnapshotLabels(ctx context.Context, project, snapshotName string, labels map[string]string) error {
+	return g.UpdateSnapshotLabelsErr
 }
