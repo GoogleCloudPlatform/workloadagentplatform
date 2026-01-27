@@ -116,6 +116,11 @@ type (
 		ExecutableFound  bool
 		ExitStatusParsed bool // Will be true if "exit status ([0-9]+)" is in the error result
 	}
+
+	// userResolver abstracts the os/user package for testability.
+	userResolver interface {
+		lookupIDs(username string) (uid, gid uint32, groups []uint32, err error)
+	}
 )
 
 /*
@@ -161,7 +166,7 @@ func ExecuteCommand(ctx context.Context, params Params) Result {
 		err = exeForPlatform(exe, params)
 	} else {
 		// We pass ctx because this calls back into ExecuteCommand which adds the timeout before running the command.
-		err = setupExeForPlatform(ctx, exe, params, ExecuteCommand)
+		err = setupExeForPlatform(ctx, exe, params, ExecuteCommand, newOSUserResolver())
 	}
 	if err != nil {
 		log.CtxLogger(ctx).Debugw("Could not setup the executable environment", "executable", params.Executable, "args", args, "error", err)
