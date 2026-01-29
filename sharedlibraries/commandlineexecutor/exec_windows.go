@@ -21,7 +21,20 @@ import (
 	"os/exec"
 )
 
+// osUserResolver is a no-op wrapper for Windows.
+type osUserResolver struct{}
+
+// newOSUserResolver returns a no-op userResolver.
+func newOSUserResolver() userResolver {
+	return &osUserResolver{}
+}
+
+// lookupIDs is a no-op on Windows.
+func (o *osUserResolver) lookupIDs(username string) (uint32, uint32, []uint32, error) {
+	return 0, 0, nil, nil
+}
+
 // setupExeForPlatform is not implemented for windows.
-func setupExeForPlatform(ctx context.Context, exe *exec.Cmd, params Params, executeCommand Execute) error {
+func setupExeForPlatform(ctx context.Context, exe *exec.Cmd, params Params, executeCommand Execute, resolver userResolver) error {
 	return nil
 }

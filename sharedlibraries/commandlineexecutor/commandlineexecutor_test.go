@@ -33,6 +33,17 @@ func setDefaults() {
 	exeForPlatform = nil
 }
 
+type fakeUserResolver struct {
+	uid    uint32
+	gid    uint32
+	groups []uint32
+	err    error
+}
+
+func (m *fakeUserResolver) lookupIDs(username string) (uint32, uint32, []uint32, error) {
+	return m.uid, m.gid, m.groups, m.err
+}
+
 func TestExecuteCommandWithArgsToSplit(t *testing.T) {
 	input := []struct {
 		name    string
@@ -311,6 +322,7 @@ func TestSetupExeForPlatform(t *testing.T) {
 		name           string
 		params         Params
 		executeCommand Execute
+		fakeResolver   *fakeUserResolver
 		want           error
 	}{
 		{
@@ -319,6 +331,7 @@ func TestSetupExeForPlatform(t *testing.T) {
 				Env: []string{"test-env"},
 			},
 			executeCommand: ExecuteCommand,
+			fakeResolver:   &fakeUserResolver{},
 			want:           nil,
 		},
 		{
@@ -327,15 +340,8 @@ func TestSetupExeForPlatform(t *testing.T) {
 				User: "test-user",
 			},
 			executeCommand: ExecuteCommand,
-			want:           cmpopts.AnyError,
-		},
-		{
-			name: "UserFailedToParse",
-			params: Params{
-				User: "test-user",
-			},
-			executeCommand: func(context.Context, Params) Result {
-				return Result{}
+			fakeResolver: &fakeUserResolver{
+				err: fmt.Errorf("user not found"),
 			},
 			want: cmpopts.AnyError,
 		},
@@ -347,13 +353,18 @@ func TestSetupExeForPlatform(t *testing.T) {
 			executeCommand: func(context.Context, Params) Result {
 				return Result{StdOut: "123"}
 			},
+			fakeResolver: &fakeUserResolver{
+				uid:    0,
+				gid:    0,
+				groups: []uint32{0},
+			},
 			want: nil,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			setDefaults()
-			got := setupExeForPlatform(context.Background(), &exec.Cmd{}, test.params, test.executeCommand)
+			got := setupExeForPlatform(context.Background(), &exec.Cmd{}, test.params, test.executeCommand, test.fakeResolver)
 			if !cmp.Equal(got, test.want, cmpopts.EquateErrors()) {
 				t.Errorf("setupExeForPlatform(%#v) = %v, want: %v", test.params, got, test.want)
 			}
