@@ -97,6 +97,15 @@ func (g *GCE) ListDisks(project, zone, filter string) (*compute.DiskList, error)
 	return g.service.Disks.List(project, zone).Filter(filter).Do()
 }
 
+// DeleteDisk deletes a GCE Persistent Disk defined by the project, zone, and name provided.
+func (g *GCE) DeleteDisk(project, zone, disk string) (*compute.Operation, error) {
+	op, err := g.service.Disks.Delete(project, zone, disk).Do()
+	if err != nil {
+		return nil, err
+	}
+	return op, nil
+}
+
 // ListZoneOperations retrieves a list of Operations resources defined by the project, and zone provided.
 // Results will be filtered according to the provided filter string, and limit the number of results to maxResults.
 func (g *GCE) ListZoneOperations(project, zone, filter string, maxResults int64) (*compute.OperationList, error) {
