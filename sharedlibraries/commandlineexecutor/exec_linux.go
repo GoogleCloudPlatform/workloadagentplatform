@@ -20,14 +20,28 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"os/user"
 	"strconv"
-	"strings"
 	"syscall"
 )
 
+// osUserResolver is a wrapper around the os/user package for testability.
+type osUserResolver struct {
+	userLookup   func(username string) (*user.User, error)
+	userGroupIds func(u *user.User) ([]string, error)
+}
+
+// newOSUserResolver returns a userResolver that uses the real os/user package.
+func newOSUserResolver() userResolver {
+	return &osUserResolver{
+		userLookup:   user.Lookup,
+		userGroupIds: func(u *user.User) ([]string, error) { return u.GroupIds() },
+	}
+}
+
 // setupExeForPlatform sets up the env and user if provided in the params.
 // returns an error if it could not be setup
-func setupExeForPlatform(ctx context.Context, exe *exec.Cmd, params Params, executeCommand Execute) error {
+func setupExeForPlatform(ctx context.Context, exe *exec.Cmd, params Params, executeCommand Execute, userResolver userResolver) error {
 	// set the execution environment if params Env exists
 	if len(params.Env) > 0 {
 		exe.Env = append(exe.Environ(), params.Env...)
@@ -35,32 +49,54 @@ func setupExeForPlatform(ctx context.Context, exe *exec.Cmd, params Params, exec
 
 	// if params.User exists run as the user
 	if params.User != "" {
-		uid, err := getUID(ctx, params.User, executeCommand)
+		uid, gid, groups, err := userResolver.lookupIDs(params.User)
 		if err != nil {
 			return err
 		}
 		exe.SysProcAttr = &syscall.SysProcAttr{}
-		exe.SysProcAttr.Credential = &syscall.Credential{Uid: uid}
+		exe.SysProcAttr.Credential = &syscall.Credential{Uid: uid, Gid: gid, Groups: groups}
 	}
 	return nil
 }
 
-/*
-getUID takes user string and returns the numeric LINUX UserId and an Error.
-Returns (0, error) in case of failure, and (uid, nil) when successful.
-Note: This is intended for Linux based system only.
-*/
-func getUID(ctx context.Context, user string, executeCommand Execute) (uint32, error) {
-	result := executeCommand(ctx, Params{
-		Executable:  "id",
-		ArgsToSplit: fmt.Sprintf("-u %s", user),
-	})
-	if result.Error != nil {
-		return 0, fmt.Errorf("getUID failed with: %s. StdErr: %s", result.Error, result.StdErr)
-	}
-	uid, err := strconv.Atoi(strings.TrimSuffix(result.StdOut, "\n"))
+func (o *osUserResolver) lookupIDs(username string) (uint32, uint32, []uint32, error) {
+	u, err := o.userLookup(username)
 	if err != nil {
-		return 0, fmt.Errorf("could not parse UID from StdOut: %s", result.StdOut)
+		return 0, 0, nil, fmt.Errorf("lookup user: %w", err)
 	}
-	return uint32(uid), nil
+
+	uid, err := parseID(u.Uid)
+	if err != nil {
+		return 0, 0, nil, fmt.Errorf("parse uid: %w", err)
+	}
+
+	gid, err := parseID(u.Gid)
+	if err != nil {
+		return 0, 0, nil, fmt.Errorf("parse gid: %w", err)
+	}
+
+	groupStrIDs, err := o.userGroupIds(u)
+	if err != nil {
+		return 0, 0, nil, fmt.Errorf("lookup groups: %w", err)
+	}
+
+	var groups []uint32
+	for _, gID := range groupStrIDs {
+		g, err := parseID(gID)
+		if err != nil {
+			return 0, 0, nil, fmt.Errorf("parse group id: %w", err)
+		}
+		groups = append(groups, g)
+	}
+
+	return uid, gid, groups, nil
+}
+
+// Helper to convert string IDs to uint32.
+func parseID(id string) (uint32, error) {
+	val, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		return 0, err
+	}
+	return uint32(val), nil
 }
