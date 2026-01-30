@@ -48,13 +48,16 @@ type TestGCE struct {
 	GetInstanceByIPErr       []error
 	GetInstanceByIPCallCount int
 
-	GetDiskResp        []*compute.Disk
-	GetDiskArgs        []*GetDiskArguments
-	GetDiskErr         []error
-	GetDiskCallCount   int
-	ListDisksResp      []*compute.DiskList
-	ListDisksErr       []error
-	ListDisksCallCount int
+	GetDiskResp         []*compute.Disk
+	GetDiskArgs         []*GetDiskArguments
+	GetDiskErr          []error
+	GetDiskCallCount    int
+	ListDisksResp       []*compute.DiskList
+	ListDisksErr        []error
+	ListDisksCallCount  int
+	DeleteDiskResp      []*compute.Operation
+	DeleteDiskErr       []error
+	DeleteDiskCallCount int
 
 	ListZoneOperationsResp      []*compute.OperationList
 	ListZoneOperationsErr       []error
@@ -184,6 +187,17 @@ func (g *TestGCE) ListDisks(project, zone, filter string) (*compute.DiskList, er
 		}
 	}()
 	return g.ListDisksResp[g.ListDisksCallCount], g.ListDisksErr[g.ListDisksCallCount]
+}
+
+// DeleteDisk fakes a call to the compute API to delete a disk.
+func (g *TestGCE) DeleteDisk(project, zone, disk string) (*compute.Operation, error) {
+	defer func() {
+		g.DeleteDiskCallCount++
+		if g.DeleteDiskCallCount >= len(g.DeleteDiskResp) || g.DeleteDiskCallCount >= len(g.DeleteDiskErr) {
+			g.DeleteDiskCallCount = 0
+		}
+	}()
+	return g.DeleteDiskResp[g.DeleteDiskCallCount], g.DeleteDiskErr[g.DeleteDiskCallCount]
 }
 
 // ListZoneOperations  fakes a call to the compute API to retrieve a list of Operations resources.
