@@ -22,6 +22,7 @@ import (
 	"os/exec"
 	"os/user"
 	"strconv"
+	"strings"
 	"syscall"
 )
 
@@ -90,6 +91,55 @@ func (o *osUserResolver) lookupIDs(username string) (uint32, uint32, []uint32, e
 	}
 
 	return uid, gid, groups, nil
+}
+
+/*
+fetchIDs fetches the UID, GID, and Group IDs for the given user.
+This is done by executing the "id" command on the system.
+Note: This is intended for Linux based system only.
+*/
+func fetchIDs(ctx context.Context, user string, executeCommand Execute) (uint32, uint32, []uint32, error) {
+	result := executeCommand(ctx, Params{
+		Executable:  "id",
+		ArgsToSplit: fmt.Sprintf("-u %s", user),
+	})
+	if result.Error != nil {
+		return 0, 0, nil, fmt.Errorf("getUID failed with: %s. StdErr: %s", result.Error, result.StdErr)
+	}
+	uid, err := strconv.Atoi(strings.TrimSuffix(result.StdOut, "\n"))
+	if err != nil {
+		return 0, 0, nil, fmt.Errorf("could not parse UID from StdOut: %s", result.StdOut)
+	}
+
+	result = executeCommand(ctx, Params{
+		Executable:  "id",
+		ArgsToSplit: fmt.Sprintf("-g %s", user),
+	})
+	if result.Error != nil {
+		return 0, 0, nil, fmt.Errorf("getGID failed with: %s. StdErr: %s", result.Error, result.StdErr)
+	}
+	gid, err := strconv.Atoi(strings.TrimSuffix(result.StdOut, "\n"))
+	if err != nil {
+		return 0, 0, nil, fmt.Errorf("could not parse GID from StdOut: %s", result.StdOut)
+	}
+
+	result = executeCommand(ctx, Params{
+		Executable:  "id",
+		ArgsToSplit: fmt.Sprintf("-G %s", user),
+	})
+	if result.Error != nil {
+		return 0, 0, nil, fmt.Errorf("getGroups failed with: %s. StdErr: %s", result.Error, result.StdErr)
+	}
+	groups := strings.Split(strings.TrimSuffix(result.StdOut, "\n"), " ")
+	var groupIDs []uint32
+	for _, gID := range groups {
+		g, err := strconv.Atoi(gID)
+		if err != nil {
+			return 0, 0, nil, fmt.Errorf("could not parse GroupID from StdOut: %s", result.StdOut)
+		}
+		groupIDs = append(groupIDs, uint32(g))
+	}
+	return uint32(uid), uint32(gid), groupIDs, nil
 }
 
 // Helper to convert string IDs to uint32.

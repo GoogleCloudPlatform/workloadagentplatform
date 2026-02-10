@@ -17,8 +17,10 @@ limitations under the License.
 package commandlineexecutor
 
 import (
+	"context"
 	"errors"
 	"os/user"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -184,6 +186,118 @@ func TestParseID(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("parseID(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+type mockExecute struct {
+	uidResult  Result
+	gidResult  Result
+	gidsResult Result
+	t          *testing.T
+}
+
+func (m *mockExecute) Execute(ctx context.Context, params Params) Result {
+	m.t.Helper()
+	if params.Executable != "id" {
+		m.t.Fatalf("unexpected executable: %s", params.Executable)
+	}
+	switch {
+	case strings.HasPrefix(params.ArgsToSplit, "-u"):
+		return m.uidResult
+	case strings.HasPrefix(params.ArgsToSplit, "-g"):
+		return m.gidResult
+	case strings.HasPrefix(params.ArgsToSplit, "-G"):
+		return m.gidsResult
+	default:
+		m.t.Fatalf("unexpected args: %s", params.ArgsToSplit)
+		return Result{}
+	}
+}
+
+func TestFetchIDs(t *testing.T) {
+	tests := []struct {
+		name       string
+		uidResult  Result
+		gidResult  Result
+		gidsResult Result
+		wantUID    uint32
+		wantGID    uint32
+		wantGroups []uint32
+		wantErr    bool
+	}{
+		{
+			name:       "Success",
+			uidResult:  Result{StdOut: "1001\n"},
+			gidResult:  Result{StdOut: "1002\n"},
+			gidsResult: Result{StdOut: "1002 2001\n"},
+			wantUID:    1001,
+			wantGID:    1002,
+			wantGroups: []uint32{1002, 2001},
+			wantErr:    false,
+		},
+		{
+			name:      "GetUIDFails",
+			uidResult: Result{Error: errors.New("uid failed")},
+			wantErr:   true,
+		},
+		{
+			name:      "GetUIDBadOutput",
+			uidResult: Result{StdOut: "abc\n"},
+			wantErr:   true,
+		},
+		{
+			name:      "GetGIDFails",
+			uidResult: Result{StdOut: "1001\n"},
+			gidResult: Result{Error: errors.New("gid failed")},
+			wantErr:   true,
+		},
+		{
+			name:      "GetGIDBadOutput",
+			uidResult: Result{StdOut: "1001\n"},
+			gidResult: Result{StdOut: "abc\n"},
+			wantErr:   true,
+		},
+		{
+			name:       "GetGroupsFails",
+			uidResult:  Result{StdOut: "1001\n"},
+			gidResult:  Result{StdOut: "1002\n"},
+			gidsResult: Result{Error: errors.New("groups failed")},
+			wantErr:    true,
+		},
+		{
+			name:       "GetGroupsBadOutput",
+			uidResult:  Result{StdOut: "1001\n"},
+			gidResult:  Result{StdOut: "1002\n"},
+			gidsResult: Result{StdOut: "1002 abc\n"},
+			wantErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := &mockExecute{
+				uidResult:  tt.uidResult,
+				gidResult:  tt.gidResult,
+				gidsResult: tt.gidsResult,
+				t:          t,
+			}
+			uid, gid, groups, err := fetchIDs(context.Background(), "testuser", mock.Execute)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("fetchIDs() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr {
+				if uid != tt.wantUID {
+					t.Errorf("fetchIDs() uid = %v, want %v", uid, tt.wantUID)
+				}
+				if gid != tt.wantGID {
+					t.Errorf("fetchIDs() gid = %v, want %v", gid, tt.wantGID)
+				}
+				if diff := cmp.Diff(tt.wantGroups, groups); diff != "" {
+					t.Errorf("fetchIDs() groups mismatch (-want +got):\n%s", diff)
+				}
 			}
 		})
 	}
