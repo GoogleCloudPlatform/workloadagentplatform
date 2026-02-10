@@ -24,6 +24,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries/log"
 )
 
 // osUserResolver is a wrapper around the os/user package for testability.
@@ -52,7 +54,12 @@ func setupExeForPlatform(ctx context.Context, exe *exec.Cmd, params Params, exec
 	if params.User != "" {
 		uid, gid, groups, err := userResolver.lookupIDs(params.User)
 		if err != nil {
-			return err
+			log.CtxLogger(ctx).Warnf("Failed to lookup user, fetching IDs using 'id' command: %v", err)
+			uid, gid, groups, err = fetchIDs(ctx, params.User, executeCommand)
+			if err != nil {
+				log.CtxLogger(ctx).Errorf("Failed to fetch IDs using 'id' command: %v", err)
+				return fmt.Errorf("failed to fetch IDs, please refer to the logs for more details: %w", err)
+			}
 		}
 		exe.SysProcAttr = &syscall.SysProcAttr{}
 		exe.SysProcAttr.Credential = &syscall.Credential{Uid: uid, Gid: gid, Groups: groups}

@@ -18,8 +18,10 @@ package commandlineexecutor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
+	"syscall"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -317,56 +319,123 @@ func TestExecuteWithEnv(t *testing.T) {
 	}
 }
 
+type mockUserResolver struct {
+	uid    uint32
+	gid    uint32
+	groups []uint32
+	err    error
+}
+
+func (m *mockUserResolver) lookupIDs(username string) (uint32, uint32, []uint32, error) {
+	return m.uid, m.gid, m.groups, m.err
+}
+
 func TestSetupExeForPlatform(t *testing.T) {
 	tests := []struct {
-		name           string
-		params         Params
-		executeCommand Execute
-		fakeResolver   *fakeUserResolver
-		want           error
+		name             string
+		params           Params
+		userResolver     userResolver
+		executeCommand   *mockExecute
+		wantEnv          []string
+		wantCred         *syscall.Credential
+		wantErr          bool
+		wantLookupIDsErr bool
 	}{
 		{
-			name: "NoUserWithEnv",
-			params: Params{
-				Env: []string{"test-env"},
+			name:   "EnvOnly",
+			params: Params{Env: []string{"VAR1=val1"}},
+			wantEnv: []string{
+				"VAR1=val1",
 			},
-			executeCommand: ExecuteCommand,
-			fakeResolver:   &fakeUserResolver{},
-			want:           nil,
 		},
 		{
-			name: "UserNotFound",
-			params: Params{
-				User: "test-user",
+			name:   "UserOnlyLookupSuccess",
+			params: Params{User: "testuser"},
+			userResolver: &mockUserResolver{
+				uid: 1001, gid: 1002, groups: []uint32{1002, 2001},
 			},
-			executeCommand: ExecuteCommand,
-			fakeResolver: &fakeUserResolver{
-				err: fmt.Errorf("user not found"),
-			},
-			want: cmpopts.AnyError,
+			wantCred: &syscall.Credential{Uid: 1001, Gid: 1002, Groups: []uint32{1002, 2001}},
 		},
 		{
-			name: "UserFound",
+			name:   "UserOnlyLookupFailsFetchSuccess",
+			params: Params{User: "testuser"},
+			userResolver: &mockUserResolver{
+				err: errors.New("lookup failed"),
+			},
+			executeCommand: &mockExecute{
+				uidResult:  Result{StdOut: "1001\n"},
+				gidResult:  Result{StdOut: "1002\n"},
+				gidsResult: Result{StdOut: "1002 2001\n"},
+				t:          t,
+			},
+			wantCred: &syscall.Credential{Uid: 1001, Gid: 1002, Groups: []uint32{1002, 2001}},
+		},
+		{
+			name:   "UserOnlyLookupFailsFetchFails",
+			params: Params{User: "testuser"},
+			userResolver: &mockUserResolver{
+				err: errors.New("lookup failed"),
+			},
+			executeCommand: &mockExecute{
+				uidResult: Result{Error: errors.New("fetch failed")},
+				t:         t,
+			},
+			wantErr: true,
+		},
+		{
+			name: "EnvAndUser",
 			params: Params{
-				User: "test-user",
+				Env:  []string{"VAR1=val1"},
+				User: "testuser",
 			},
-			executeCommand: func(context.Context, Params) Result {
-				return Result{StdOut: "123"}
+			userResolver: &mockUserResolver{
+				uid: 1001, gid: 1002, groups: []uint32{1002, 2001},
 			},
-			fakeResolver: &fakeUserResolver{
-				uid:    0,
-				gid:    0,
-				groups: []uint32{0},
-			},
-			want: nil,
+			wantEnv:  []string{"VAR1=val1"},
+			wantCred: &syscall.Credential{Uid: 1001, Gid: 1002, Groups: []uint32{1002, 2001}},
+		},
+		{
+			name:   "NoEnvNoUser",
+			params: Params{},
 		},
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			setDefaults()
-			got := setupExeForPlatform(context.Background(), &exec.Cmd{}, test.params, test.executeCommand, test.fakeResolver)
-			if !cmp.Equal(got, test.want, cmpopts.EquateErrors()) {
-				t.Errorf("setupExeForPlatform(%#v) = %v, want: %v", test.params, got, test.want)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exe := &exec.Cmd{}
+			var execute Execute
+			if tt.executeCommand != nil {
+				execute = tt.executeCommand.Execute
+			}
+			err := setupExeForPlatform(context.Background(), exe, tt.params, execute, tt.userResolver)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("setupExeForPlatform() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if tt.wantEnv != nil {
+				for _, want := range tt.wantEnv {
+					found := false
+					for _, got := range exe.Env {
+						if got == want {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("setupExeForPlatform() missing env var = %v, want in %v", want, exe.Env)
+					}
+				}
+			}
+
+			if tt.wantCred != nil {
+				if exe.SysProcAttr == nil || exe.SysProcAttr.Credential == nil {
+					t.Errorf("setupExeForPlatform() SysProcAttr.Credential is nil, want %v", tt.wantCred)
+				} else if diff := cmp.Diff(tt.wantCred, exe.SysProcAttr.Credential); diff != "" {
+					t.Errorf("setupExeForPlatform() SysProcAttr.Credential mismatch (-want +got):\n%s", diff)
+				}
+			} else if exe.SysProcAttr != nil {
+				t.Errorf("setupExeForPlatform() SysProcAttr is not nil, want nil")
 			}
 		})
 	}
