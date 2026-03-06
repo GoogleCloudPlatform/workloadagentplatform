@@ -379,7 +379,7 @@ message BackupConfiguration {
 //     configuration fields defined in the proto. --)
 message GCBDRConfiguration {
   // Whether the resource is managed by GCBDR.
-  bool gcbdr_managed = 1;
+  optional bool gcbdr_managed = 1;
 }
 
 message RetentionSettings {
