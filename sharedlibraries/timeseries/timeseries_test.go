@@ -49,9 +49,10 @@ var (
 		"instance_id": "123456",
 	}
 	bmsLabels = map[string]string{
-		"resource_container": "test-project",
-		"location":           "test-location",
-		"instance_id":        "test-bms-id",
+		"project_id": "test-project",
+		"location":   "test-location",
+		"namespace":  "test-bms",
+		"node_id":    "test-bms",
 	}
 	defaultCloudProperties = &metadataserver.CloudProperties{
 		ProjectID:  "test-project",
@@ -62,7 +63,6 @@ var (
 		ProjectID:    "test-project",
 		Region:       "test-location",
 		InstanceName: "test-bms",
-		InstanceID:   "test-bms-id",
 	}
 	now = &tpb.Timestamp{
 		Seconds: 1234,
@@ -184,57 +184,51 @@ func TestBuildFloat64(t *testing.T) {
 
 func TestMonitoredResource(t *testing.T) {
 	tests := []struct {
-		name           string
-		cloudProps     *metadataserver.CloudProperties
-		bareMetal      bool
-		healthbeat     bool
+		name       string
+		cloudProps *metadataserver.CloudProperties
+		bareMetal  bool
+		heartbeat      bool
 		resourceLabels map[string]string
 		want           *mrespb.MonitoredResource
 	}{
 		{
-			name:       "BareMetal",
-			cloudProps: bmsCloudProperties,
-			bareMetal:  true,
+			name:           "BareMetal",
+			cloudProps:     bmsCloudProperties,
+			bareMetal:      true,
+			heartbeat:      false,
+			resourceLabels: nil,
 			want: &mrespb.MonitoredResource{
-				Type:   "baremetalsolution.googleapis.com/Instance",
+				Type:   "generic_node",
 				Labels: bmsLabels,
 			},
 		},
 		{
-			name:       "GCE",
-			cloudProps: defaultCloudProperties,
+			name:           "GCE",
+			cloudProps:     defaultCloudProperties,
+			bareMetal:      false,
+			heartbeat:      false,
+			resourceLabels: nil,
 			want: &mrespb.MonitoredResource{
 				Type:   "gce_instance",
 				Labels: gceLabels,
 			},
 		},
-
 		{
-			name:           "BareMetalHeartbeat",
-			cloudProps:     bmsCloudProperties,
-			bareMetal:      true,
-			healthbeat:     true,
-			resourceLabels: map[string]string{"instance_id": "123"},
-			want: &mrespb.MonitoredResource{
-				Type:   "compute.googleapis.com/WorkloadProcess",
-				Labels: map[string]string{"instance_id": "123"},
-			},
-		},
-		{
-			name:           "GCEHeartbeat",
+			name:           "Heartbeat",
 			cloudProps:     defaultCloudProperties,
-			healthbeat:     true,
-			resourceLabels: map[string]string{"instance_id": "123"},
+			bareMetal:      false,
+			heartbeat:      true,
+			resourceLabels: map[string]string{"test_key": "test_val"},
 			want: &mrespb.MonitoredResource{
 				Type:   "compute.googleapis.com/WorkloadProcess",
-				Labels: map[string]string{"instance_id": "123"},
+				Labels: map[string]string{"test_key": "test_val"},
 			},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got := monitoredResource(test.cloudProps, test.bareMetal, test.healthbeat, test.resourceLabels)
+			got := monitoredResource(test.cloudProps, test.bareMetal, test.heartbeat, test.resourceLabels)
 			if diff := cmp.Diff(test.want, got, protocmp.Transform()); diff != "" {
 				t.Errorf("Failure in monitoredResource(), (-want +got):\n%s", diff)
 			}

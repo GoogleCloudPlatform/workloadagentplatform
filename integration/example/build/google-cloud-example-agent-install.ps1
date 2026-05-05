@@ -159,7 +159,7 @@ try {
   Log-Write 'Monitor task added'
 
   $Success = $true
-  Log-Write 'Successuflly installed the Google Cloud Example Agent'
+  Log-Write 'Successfully installed the Google Cloud Example Agent'
   # log usage metrics for install
   Log-Install
 }
