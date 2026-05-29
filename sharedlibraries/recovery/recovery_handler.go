@@ -60,7 +60,7 @@ func (r *RecoverableRoutine) StartRoutine(ctx context.Context) {
 		defer func() {
 			if p := recover(); p != nil {
 				log.CtxLogger(routineCtx).Warnw("Panic in routine, attempting to recover", "panic", p)
-				log.CtxLogger(routineCtx).Debugw("Stack trace", "stack", string(debug.Stack()))
+				log.CtxLogger(routineCtx).Infow("Stack trace", "stack", string(debug.Stack()))
 				n := time.Now()
 				log.CtxLogger(routineCtx).Debugf("Checking if routine failed too quickly: %v ? %v, %v", r.lastRestart, n, r.ExpectedMinDuration)
 				if n.Sub(r.lastRestart) >= r.ExpectedMinDuration {
