@@ -439,6 +439,8 @@ enum SignalType {
   // Represents if a resources requires all incoming connections to use SSL
   // or not.
   SIGNAL_TYPE_UNENCRYPTED_CONNECTIONS = 5;
+  // Represents if a resource is not protected by automatic failover.
+  SIGNAL_TYPE_NOT_PROTECTED_BY_AUTOMATIC_FAILOVER = 6;
 }
 
 // Config based signal data. This is used to send signals to Condor which are
