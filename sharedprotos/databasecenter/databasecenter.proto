@@ -441,6 +441,9 @@ enum SignalType {
   SIGNAL_TYPE_UNENCRYPTED_CONNECTIONS = 5;
   // Represents if a resource is not protected by automatic failover.
   SIGNAL_TYPE_NOT_PROTECTED_BY_AUTOMATIC_FAILOVER = 6;
+
+  // Represents if a resource has an automated backup policy.
+  SIGNAL_TYPE_NO_AUTOMATED_BACKUP_POLICY = 7;
 }
 
 // Config based signal data. This is used to send signals to Condor which are
