@@ -444,6 +444,10 @@ enum SignalType {
 
   // Represents if a resource has an automated backup policy.
   SIGNAL_TYPE_NO_AUTOMATED_BACKUP_POLICY = 7;
+
+  // Represents if the last backup of a resource is older than some threshold
+  // value.
+  SIGNAL_TYPE_LAST_BACKUP_OLD = 8;
 }
 
 // Config based signal data. This is used to send signals to Condor which are
