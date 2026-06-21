@@ -366,4 +366,17 @@ message SapDiscovery {
   }
   // Whether to use DR reconciliation or not.
   bool use_dr_reconciliation = 8;
+
+  // An enum representing the registration state of the system.
+  enum RegistrationState {
+    // Unspecified registration state.
+    REGISTRATION_STATE_UNSPECIFIED = 0;
+    // The system is registered.
+    REGISTERED = 1;
+    // The system has been explicitly ignored.
+    IGNORED = 2;
+  }
+
+  // The registration state of the system.
+  RegistrationState registration_state = 9;
 }
