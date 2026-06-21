@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+	"strings"
 
 	"github.com/pkg/errors"
 	"google.golang.org/api/googleapi"
