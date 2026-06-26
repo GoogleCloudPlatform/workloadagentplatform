@@ -439,15 +439,17 @@ enum SignalType {
   // Represents if a resources requires all incoming connections to use SSL
   // or not.
   SIGNAL_TYPE_UNENCRYPTED_CONNECTIONS = 5;
-  // Represents if a resource is not protected by automatic failover.
-  SIGNAL_TYPE_NOT_PROTECTED_BY_AUTOMATIC_FAILOVER = 6;
-
+  // Represents if a resource version is in extended support.
+  SIGNAL_TYPE_EXTENDED_SUPPORT = 6;
   // Represents if a resource has an automated backup policy.
   SIGNAL_TYPE_NO_AUTOMATED_BACKUP_POLICY = 7;
-
+  // Represents if a resource version is nearing end of life.
+  SIGNAL_TYPE_VERSION_NEARING_END_OF_LIFE = 8;
   // Represents if the last backup of a resource is older than some threshold
   // value.
-  SIGNAL_TYPE_LAST_BACKUP_OLD = 8;
+  SIGNAL_TYPE_LAST_BACKUP_OLD = 9;
+  // Represents if a resource is not protected by automatic failover.
+  SIGNAL_TYPE_NOT_PROTECTED_BY_AUTOMATIC_FAILOVER = 10;
 }
 
 // Config based signal data. This is used to send signals to Condor which are
