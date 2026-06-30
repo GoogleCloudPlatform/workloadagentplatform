@@ -182,6 +182,9 @@ func ExecuteCommand(ctx context.Context, params Params) Result {
 		err = exe.Run()
 	}
 	if err != nil {
+		if errors.Is(tctx.Err(), context.DeadlineExceeded) {
+			err = fmt.Errorf("command timed out after %s: %w", timeout, err)
+		}
 		// Set the exit code based on the error first, then see if we can get it from the error message.
 		exitCode := exitCode(err)
 		m := exitStatusPattern.FindStringSubmatch(err.Error())

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -510,5 +511,20 @@ func TestExecuteCommandWithStdin(t *testing.T) {
 				t.Fatalf("ExecuteCommand returned unexpected diff (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestExecuteCommandTimeout(t *testing.T) {
+	setDefaults()
+	result := ExecuteCommand(context.Background(), Params{
+		Executable: "sleep",
+		Args:       []string{"5"},
+		Timeout:    1,
+	})
+	if result.Error == nil {
+		t.Fatalf("expected error from timeout, got nil")
+	}
+	if wantMatch := "command timed out after"; !strings.Contains(result.Error.Error(), wantMatch) {
+		t.Errorf("expected error message to contain %q, got: %v", wantMatch, result.Error)
 	}
 }
