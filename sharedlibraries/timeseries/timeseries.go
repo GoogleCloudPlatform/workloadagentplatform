@@ -28,18 +28,16 @@ import (
 
 // Params has the necessary data to create a timeseries points.
 type Params struct {
-	BareMetal      bool
-	Heartbeat      bool
-	ResourceLabels map[string]string
-	CloudProp      *metadataserver.CloudProperties
-	MetricType     string
-	MetricLabels   map[string]string
-	MetricKind     mpb.MetricDescriptor_MetricKind
-	StartTime      *tpb.Timestamp
-	Timestamp      *tpb.Timestamp
-	Int64Value     int64
-	Float64Value   float64
-	BoolValue      bool
+	BareMetal    bool
+	CloudProp    *metadataserver.CloudProperties
+	MetricType   string
+	MetricLabels map[string]string
+	MetricKind   mpb.MetricDescriptor_MetricKind
+	StartTime    *tpb.Timestamp
+	Timestamp    *tpb.Timestamp
+	Int64Value   int64
+	Float64Value float64
+	BoolValue    bool
 }
 
 // BuildInt builds a cloud monitoring timeseries with Int64 point.
@@ -112,39 +110,34 @@ func buildTimeSeries(p Params) *mrpb.TimeSeries {
 			Labels: p.MetricLabels,
 		},
 		MetricKind: p.MetricKind,
-		Resource:   monitoredResource(p.CloudProp, p.BareMetal, p.Heartbeat, p.ResourceLabels),
+		Resource:   monitoredResource(p.CloudProp, p.BareMetal, false, nil),
 	}
 }
 
-func monitoredResource(cp *metadataserver.CloudProperties, bareMetal bool, hearbeat bool, resourceLabels map[string]string) *mrespb.MonitoredResource {
-	switch {
-	case bareMetal && hearbeat: // Hearbeat metrics for bare metal.
+func monitoredResource(cp *metadataserver.CloudProperties, bareMetal bool, heartbeat bool, resourceLabels map[string]string) *mrespb.MonitoredResource {
+	if heartbeat {
 		return &mrespb.MonitoredResource{
 			Type:   "compute.googleapis.com/WorkloadProcess",
 			Labels: resourceLabels,
 		}
-	case bareMetal: // Regular custom metrics for bare metal.
+	}
+	if bareMetal {
 		return &mrespb.MonitoredResource{
-			Type: "baremetalsolution.googleapis.com/Instance",
+			Type: "generic_node",
 			Labels: map[string]string{
-				"resource_container": cp.ProjectID,
-				"location":           cp.Region,
-				"instance_id":        cp.InstanceID,
+				"project_id": cp.ProjectID,
+				"location":   cp.Region,
+				"namespace":  cp.InstanceName,
+				"node_id":    cp.InstanceName,
 			},
 		}
-	case hearbeat: // Hearbeat metrics for GCE.
-		return &mrespb.MonitoredResource{
-			Type:   "compute.googleapis.com/WorkloadProcess",
-			Labels: resourceLabels,
-		}
-	default: // Regular custom metrics for GCE.
-		return &mrespb.MonitoredResource{
-			Type: "gce_instance",
-			Labels: map[string]string{
-				"project_id":  cp.ProjectID,
-				"zone":        cp.Zone,
-				"instance_id": cp.InstanceID,
-			},
-		}
+	}
+	return &mrespb.MonitoredResource{
+		Type: "gce_instance",
+		Labels: map[string]string{
+			"project_id":  cp.ProjectID,
+			"zone":        cp.Zone,
+			"instance_id": cp.InstanceID,
+		},
 	}
 }
