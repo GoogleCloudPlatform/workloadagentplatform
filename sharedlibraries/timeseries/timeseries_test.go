@@ -25,8 +25,8 @@ import (
 
 	mpb "google.golang.org/genproto/googleapis/api/metric"
 	mrespb "google.golang.org/genproto/googleapis/api/monitoredres"
-	cpb "google.golang.org/genproto/googleapis/monitoring/v3"
-	mrpb "google.golang.org/genproto/googleapis/monitoring/v3"
+	cpb "cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
+	mrpb "cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
 	tpb "google.golang.org/protobuf/types/known/timestamppb"
 	"github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries/gce/metadataserver"
 	"github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries/log"

@@ -26,7 +26,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"cloud.google.com/go/secretmanager/apiv1"
 	"github.com/pkg/errors"
-	smpb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1"
+	smpb "cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/file/v1"
 	"github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries/log"

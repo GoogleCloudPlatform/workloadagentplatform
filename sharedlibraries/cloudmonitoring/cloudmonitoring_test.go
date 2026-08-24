@@ -31,9 +31,9 @@ import (
 
 	metricpb "google.golang.org/genproto/googleapis/api/metric"
 	monitoredresourcepb "google.golang.org/genproto/googleapis/api/monitoredres"
-	cpb "google.golang.org/genproto/googleapis/monitoring/v3"
-	mpb "google.golang.org/genproto/googleapis/monitoring/v3"
-	mrpb "google.golang.org/genproto/googleapis/monitoring/v3"
+	cpb "cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
+	mpb "cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
+	mrpb "cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
 )
 
 func TestMain(t *testing.M) {

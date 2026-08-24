@@ -24,8 +24,8 @@ import (
 
 	metricpb "google.golang.org/genproto/googleapis/api/metric"
 	monitoredrespb "google.golang.org/genproto/googleapis/api/monitoredres"
-	mpb "google.golang.org/genproto/googleapis/monitoring/v3"
-	mrpb "google.golang.org/genproto/googleapis/monitoring/v3"
+	mpb "cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
+	mrpb "cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
 )
 
 // TimeSeriesCreator is a fake which implements the TimeSeriesCreator interface.
