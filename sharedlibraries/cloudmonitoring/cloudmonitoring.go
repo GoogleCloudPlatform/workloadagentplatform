@@ -30,8 +30,8 @@ import (
 
 	metricpb "google.golang.org/genproto/googleapis/api/metric"
 	monitoredrespb "google.golang.org/genproto/googleapis/api/monitoredres"
-	mpb "google.golang.org/genproto/googleapis/monitoring/v3"
-	mrpb "google.golang.org/genproto/googleapis/monitoring/v3"
+	mpb "cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
+	mrpb "cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
 )
 
 // timeSeriesKey is a struct which holds the information which can uniquely identify each time series
