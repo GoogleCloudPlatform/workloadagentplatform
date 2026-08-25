@@ -1,0 +1,6 @@
+{
+  "log_level": "INFO",
+  "log_to_cloud": true,
+  "fast_service_loop_seconds": 5,
+  "slow_service_loop_seconds": 30
+}
