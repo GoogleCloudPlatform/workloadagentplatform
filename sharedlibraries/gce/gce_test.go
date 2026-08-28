@@ -159,3 +159,120 @@ func TestGetInstanceCPUAndMemorySize(t *testing.T) {
 		})
 	}
 }
+
+func TestDiskAttachedToInstance(t *testing.T) {
+	project := "test-project"
+	zone := "us-central1-a"
+	instanceName := "test-instance"
+
+	tests := []struct {
+		name       string
+		diskName   string
+		handler    *fakeGCEHandler
+		wantDev    string
+		wantOK     bool
+		wantErr    bool
+	}{
+		{
+			name:     "EmptyDiskName",
+			diskName: "",
+			handler: &fakeGCEHandler{
+				instanceResponse: &compute.Instance{
+					Name: instanceName,
+					Disks: []*compute.AttachedDisk{
+						{
+							DeviceName: "dev-1",
+							Source:     "projects/test-project/zones/us-central1-a/disks/disk-1",
+						},
+					},
+				},
+			},
+			wantDev: "",
+			wantOK:  false,
+			wantErr: false,
+		},
+		{
+			name:     "AttachedSuccess",
+			diskName: "disk-1",
+			handler: &fakeGCEHandler{
+				instanceResponse: &compute.Instance{
+					Name: instanceName,
+					Disks: []*compute.AttachedDisk{
+						{
+							DeviceName: "dev-1",
+							Source:     "projects/test-project/zones/us-central1-a/disks/disk-1",
+						},
+					},
+				},
+			},
+			wantDev: "dev-1",
+			wantOK:  true,
+			wantErr: false,
+		},
+		{
+			name:     "SubstringNotMatched",
+			diskName: "disk-1",
+			handler: &fakeGCEHandler{
+				instanceResponse: &compute.Instance{
+					Name: instanceName,
+					Disks: []*compute.AttachedDisk{
+						{
+							DeviceName: "dev-10",
+							Source:     "projects/test-project/zones/us-central1-a/disks/disk-10",
+						},
+					},
+				},
+			},
+			wantDev: "",
+			wantOK:  false,
+			wantErr: false,
+		},
+		{
+			name:     "NotAttached",
+			diskName: "disk-2",
+			handler: &fakeGCEHandler{
+				instanceResponse: &compute.Instance{
+					Name: instanceName,
+					Disks: []*compute.AttachedDisk{
+						{
+							DeviceName: "dev-1",
+							Source:     "projects/test-project/zones/us-central1-a/disks/disk-1",
+						},
+					},
+				},
+			},
+			wantDev: "",
+			wantOK:  false,
+			wantErr: false,
+		},
+		{
+			name:     "InstanceError",
+			diskName: "disk-1",
+			handler: &fakeGCEHandler{
+				instanceError: http.StatusNotFound,
+			},
+			wantDev: "",
+			wantOK:  false,
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			service, teardown := setupTestServer(context.Background(), t, tc.handler)
+			defer teardown()
+			gceService := &GCE{service: service}
+
+			dev, ok, err := gceService.DiskAttachedToInstance(project, zone, instanceName, tc.diskName)
+			if (err != nil) != tc.wantErr {
+				t.Errorf("DiskAttachedToInstance(%q) error = %v, wantErr %v", tc.diskName, err, tc.wantErr)
+			}
+			if ok != tc.wantOK {
+				t.Errorf("DiskAttachedToInstance(%q) ok = %v, wantOK %v", tc.diskName, ok, tc.wantOK)
+			}
+			if dev != tc.wantDev {
+				t.Errorf("DiskAttachedToInstance(%q) dev = %q, wantDev %q", tc.diskName, dev, tc.wantDev)
+			}
+		})
+	}
+}

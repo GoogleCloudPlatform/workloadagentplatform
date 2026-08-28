@@ -102,6 +102,9 @@ func TestGetResponseWithURLVariations(t *testing.T) {
 		case "/test/error_response":
 			w.WriteHeader(http.StatusBadRequest)
 			fmt.Fprint(w, `{"error": {"code": 400, "message": "error message"}}`)
+		case "/test/empty_array_error":
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, `[]`)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -168,6 +171,23 @@ func TestGetResponseWithURLVariations(t *testing.T) {
 			},
 			method:  "GET",
 			baseURL: ts.URL + "/test/error_response",
+			wantErr: cmpopts.AnyError,
+		},
+		{
+			name: "EmptyArrayErrorResponse",
+			r: &Rest{
+				HTTPClient: defaultNewClient(10*time.Minute, defaultTransport()),
+				TokenGetter: func(ctx context.Context, scopes ...string) (oauth2.TokenSource, error) {
+					return &mockToken{
+						token: &oauth2.Token{
+							AccessToken: "access-token",
+						},
+						err: nil,
+					}, nil
+				},
+			},
+			method:  "GET",
+			baseURL: ts.URL + "/test/empty_array_error",
 			wantErr: cmpopts.AnyError,
 		},
 		{

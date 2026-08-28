@@ -104,10 +104,10 @@ func (r *Rest) GetResponse(ctx context.Context, method string, baseURL string, d
 	token.SetAuthHeader(req)
 
 	resp, err := r.HTTPClient.Do(req)
-	defer googleapi.CloseBody(resp)
 	if err != nil {
 		return nil, err
 	}
+	defer googleapi.CloseBody(resp)
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -122,9 +122,10 @@ func (r *Rest) GetResponse(ctx context.Context, method string, baseURL string, d
 			return nil, fmt.Errorf("response code is not okay, error: %s", string(bodyBytes))
 		}
 		log.CtxLogger(ctx).Errorw("getresponse error", "error", googleapiErr)
-		if googleapiErr[0].Err.Code != http.StatusOK {
+		if len(googleapiErr) > 0 && googleapiErr[0].Err.Code != http.StatusOK {
 			return nil, fmt.Errorf("%s", googleapiErr[0].Err.Message)
 		}
+		return nil, fmt.Errorf("response code is not okay: %s", string(bodyBytes))
 	}
 
 	return bodyBytes, nil

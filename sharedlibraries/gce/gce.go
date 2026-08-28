@@ -20,6 +20,7 @@ package gce
 import (
 	"context"
 	"fmt"
+	"path"
 	"strings"
 	"time"
 
@@ -267,7 +268,8 @@ func (g *GCE) DiskAttachedToInstance(project, zone, instanceName, diskName strin
 	}
 	for _, disk := range instance.Disks {
 		log.Logger.Debugw("Disk attached to instance", "disk", disk.Source, "diskName", diskName)
-		if strings.Contains(disk.Source, diskName) {
+		sourceName := path.Base(disk.Source)
+		if sourceName == diskName || disk.Source == diskName {
 			return disk.DeviceName, true, nil
 		}
 	}
