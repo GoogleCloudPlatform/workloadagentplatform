@@ -181,7 +181,10 @@ enum ProductType {
   // UNSPECIFIED means product type is not known or available.
   PRODUCT_TYPE_UNSPECIFIED = 0;
 
-  reserved 1, 2, 3, 6, 7, 8;
+  reserved 2, 3, 6, 7, 8;
+
+  // Cloud SQL product area in GCP
+  PRODUCT_TYPE_CLOUD_SQL = 1;
 
   // On-premise product area
   PRODUCT_TYPE_ON_PREM = 4;
