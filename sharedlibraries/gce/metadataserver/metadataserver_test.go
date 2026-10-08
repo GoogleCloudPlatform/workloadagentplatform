@@ -18,11 +18,14 @@ package metadataserver
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/cenkalti/backoff/v4"
@@ -521,6 +524,208 @@ func TestRegionFromZone(t *testing.T) {
 			got := regionFromZone(test.zone)
 			if got != test.want {
 				t.Errorf("regionFromZone(%s) = %s, want %s", test.zone, got, test.want)
+			}
+		})
+	}
+}
+
+type mdsResponse struct {
+	status int
+	body   string
+}
+
+// universeDomainServer returns a fake metadata server that serves the universe domain endpoint. The
+// i-th request receives responses[i]; requests beyond the end of the slice receive the last
+// response. The returned counter tracks the number of requests to the universe domain endpoint.
+func universeDomainServer(t *testing.T, responses ...mdsResponse) (*httptest.Server, *atomic.Int32) {
+	t.Helper()
+	var count atomic.Int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if h := r.Header.Get("Metadata-Flavor"); h != "Google" {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		if r.URL.Path != universeDomainURI {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		i := int(count.Add(1)) - 1
+		if i >= len(responses) {
+			i = len(responses) - 1
+		}
+		w.WriteHeader(responses[i].status)
+		fmt.Fprint(w, responses[i].body)
+	}))
+	t.Cleanup(ts.Close)
+	return ts, &count
+}
+
+// setMetadataServerURL overrides the metadata server URL for the duration of the test.
+func setMetadataServerURL(t *testing.T, u string) {
+	t.Helper()
+	orig := metadataServerURL
+	metadataServerURL = u
+	t.Cleanup(func() { metadataServerURL = orig })
+}
+
+func TestGetNotFound(t *testing.T) {
+	ts, _ := universeDomainServer(t, mdsResponse{status: http.StatusOK})
+	setMetadataServerURL(t, ts.URL)
+
+	_, err := get("/unsupported", "")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("get(%q) error = %v, want error wrapping ErrNotFound", "/unsupported", err)
+	}
+}
+
+func TestGetServerErrorIsNotNotFound(t *testing.T) {
+	ts, _ := universeDomainServer(t, mdsResponse{status: http.StatusServiceUnavailable})
+	setMetadataServerURL(t, ts.URL)
+
+	_, err := get(universeDomainURI, "")
+	if err == nil {
+		t.Fatalf("get(%q) error = nil, want non-nil", universeDomainURI)
+	}
+	if errors.Is(err, ErrNotFound) {
+		t.Errorf("get(%q) error = %v, want error not wrapping ErrNotFound", universeDomainURI, err)
+	}
+}
+
+func TestUniverseDomainWithRetry(t *testing.T) {
+	tests := []struct {
+		name         string
+		responses    []mdsResponse
+		want         string
+		wantRequests int32
+	}{
+		{
+			name:         "tpcUniverse",
+			responses:    []mdsResponse{{status: http.StatusOK, body: "apis-berlin-build0.goog"}},
+			want:         "apis-berlin-build0.goog",
+			wantRequests: 1,
+		},
+		{
+			name:         "trimsWhitespace",
+			responses:    []mdsResponse{{status: http.StatusOK, body: " s3nsapis.fr\n"}},
+			want:         "s3nsapis.fr",
+			wantRequests: 1,
+		},
+		{
+			name:         "explicitDefaultUniverse",
+			responses:    []mdsResponse{{status: http.StatusOK, body: "googleapis.com"}},
+			want:         DefaultUniverseDomain,
+			wantRequests: 1,
+		},
+		{
+			name:         "emptyBodyUsesDefault",
+			responses:    []mdsResponse{{status: http.StatusOK, body: ""}},
+			want:         DefaultUniverseDomain,
+			wantRequests: 1,
+		},
+		{
+			name:         "notFoundUsesDefaultWithoutRetry",
+			responses:    []mdsResponse{{status: http.StatusNotFound, body: "404 Page not found"}},
+			want:         DefaultUniverseDomain,
+			wantRequests: 1,
+		},
+		{
+			name: "transientErrorThenSuccess",
+			responses: []mdsResponse{
+				{status: http.StatusServiceUnavailable},
+				{status: http.StatusOK, body: "apis-berlin-build0.goog"},
+			},
+			want:         "apis-berlin-build0.goog",
+			wantRequests: 2,
+		},
+		{
+			name:         "persistentErrorUsesDefault",
+			responses:    []mdsResponse{{status: http.StatusInternalServerError}},
+			want:         DefaultUniverseDomain,
+			wantRequests: 2,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ts, count := universeDomainServer(t, test.responses...)
+			setMetadataServerURL(t, ts.URL)
+
+			got := UniverseDomainWithRetry(testBackOffPolicy())
+			if got != test.want {
+				t.Errorf("UniverseDomainWithRetry() = %q, want %q", got, test.want)
+			}
+			if gotRequests := count.Load(); gotRequests != test.wantRequests {
+				t.Errorf("UniverseDomainWithRetry() made %d requests, want %d", gotRequests, test.wantRequests)
+			}
+		})
+	}
+}
+
+func TestUniverseDomainWithRetryUnreachable(t *testing.T) {
+	ts, _ := universeDomainServer(t, mdsResponse{status: http.StatusOK, body: "apis-berlin-build0.goog"})
+	ts.Close()
+	setMetadataServerURL(t, ts.URL)
+
+	if got := UniverseDomainWithRetry(testBackOffPolicy()); got != DefaultUniverseDomain {
+		t.Errorf("UniverseDomainWithRetry() with unreachable metadata server = %q, want %q", got, DefaultUniverseDomain)
+	}
+}
+
+func TestConfigureUniverseDomainWithRetry(t *testing.T) {
+	tests := []struct {
+		name         string
+		env          string
+		responses    []mdsResponse
+		want         string
+		wantEnv      string
+		wantRequests int32
+	}{
+		{
+			name:         "envVarOverridesMetadataServer",
+			env:          "custom-universe.goog",
+			responses:    []mdsResponse{{status: http.StatusOK, body: "apis-berlin-build0.goog"}},
+			want:         "custom-universe.goog",
+			wantEnv:      "custom-universe.goog",
+			wantRequests: 0,
+		},
+		{
+			name:         "tpcUniverseSetsEnvVar",
+			responses:    []mdsResponse{{status: http.StatusOK, body: "apis-berlin-build0.goog"}},
+			want:         "apis-berlin-build0.goog",
+			wantEnv:      "apis-berlin-build0.goog",
+			wantRequests: 1,
+		},
+		{
+			name:         "defaultUniverseDoesNotSetEnvVar",
+			responses:    []mdsResponse{{status: http.StatusNotFound}},
+			want:         DefaultUniverseDomain,
+			wantEnv:      "",
+			wantRequests: 1,
+		},
+		{
+			name:         "metadataServerErrorDoesNotSetEnvVar",
+			responses:    []mdsResponse{{status: http.StatusInternalServerError}},
+			want:         DefaultUniverseDomain,
+			wantEnv:      "",
+			wantRequests: 2,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// t.Setenv restores the original value when the test completes. An empty value is treated
+			// as unset by ConfigureUniverseDomainWithRetry.
+			t.Setenv(UniverseDomainEnvVar, test.env)
+			ts, count := universeDomainServer(t, test.responses...)
+			setMetadataServerURL(t, ts.URL)
+
+			got := ConfigureUniverseDomainWithRetry(testBackOffPolicy())
+			if got != test.want {
+				t.Errorf("ConfigureUniverseDomainWithRetry() = %q, want %q", got, test.want)
+			}
+			if gotEnv := os.Getenv(UniverseDomainEnvVar); gotEnv != test.wantEnv {
+				t.Errorf("ConfigureUniverseDomainWithRetry() set %s=%q, want %q", UniverseDomainEnvVar, gotEnv, test.wantEnv)
+			}
+			if gotRequests := count.Load(); gotRequests != test.wantRequests {
+				t.Errorf("ConfigureUniverseDomainWithRetry() made %d requests, want %d", gotRequests, test.wantRequests)
 			}
 		})
 	}
