@@ -23,10 +23,12 @@ package metadataserver
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -60,12 +62,23 @@ const (
 	upcomingMaintenanceURI = "/instance/upcoming-maintenance"
 	diskType               = "/instance/disks/"
 	instanceAttribute      = "/instance/attributes/"
+	universeDomainURI      = "/universe/universe-domain"
 
 	helpString = `For information on permissions needed to access metadata refer: https://cloud.google.com/compute/docs/metadata/querying-metadata#permissions. Restart the agent after adding necessary permissions.`
 
 	// PlatformCloudRun identifies Google Cloud Run environments.
 	PlatformCloudRun = "CLOUD_RUN"
+
+	// DefaultUniverseDomain is the universe domain of the Google Default Universe (GDU).
+	DefaultUniverseDomain = "googleapis.com"
+
+	// UniverseDomainEnvVar is the environment variable honored by Google Cloud client libraries to
+	// select the universe domain used to construct API endpoints.
+	UniverseDomainEnvVar = "GOOGLE_CLOUD_UNIVERSE_DOMAIN"
 )
+
+// ErrNotFound is returned (wrapped) when the metadata server responds with HTTP 404 Not Found.
+var ErrNotFound = errors.New("metadata server endpoint not found")
 
 type (
 	metadataServerResponse struct {
@@ -180,6 +193,31 @@ func InstanceAttributeWithRetry(bo backoff.BackOff, key string) string {
 	return value
 }
 
+// UniverseDomainWithRetry fetches the universe domain from the GCE metadata server with a retry
+// mechanism.
+//
+// A 404 response from the metadata server is not retried and results in DefaultUniverseDomain.
+func UniverseDomainWithRetry(bo backoff.BackOff) string {
+	var (
+		attempt = 1
+		domain  string
+	)
+	err := backoff.Retry(func() error {
+		var err error
+		domain, err = requestUniverseDomain()
+		if err != nil {
+			log.Logger.Warnw("Error in requestUniverseDomain", "attempt", attempt, "error", err)
+			attempt++
+		}
+		return err
+	}, bo)
+	if err != nil {
+		log.Logger.Warnw("UniverseDomain request retry limit exceeded, using default universe domain", "universeDomain", DefaultUniverseDomain, log.Error(err))
+		return DefaultUniverseDomain
+	}
+	return domain
+}
+
 // get performs a get request to the metadata server and returns the response body.
 func get(uri, queryString string) ([]byte, error) {
 	metadataURL, err := url.Parse(metadataServerURL)
@@ -206,6 +244,9 @@ func get(uri, queryString string) ([]byte, error) {
 				return nil, fmt.Errorf("failed to read response body from metadata server: %v", err)
 			}
 			return body, nil
+		}
+		if res.StatusCode == http.StatusNotFound {
+			return nil, fmt.Errorf("%w: unsuccessful response from metadata server: %s, %s", ErrNotFound, res.Status, helpString)
 		}
 		return nil, fmt.Errorf("unsuccessful response from metadata server: %s, %s", res.Status, helpString)
 	}
@@ -288,6 +329,24 @@ func requestInstanceAttribute(key string) (string, error) {
 	return string(body), nil
 }
 
+// requestUniverseDomain attempts to fetch the universe domain from the GCE metadata server.
+//
+// The universe endpoint is only published in Trusted Partner Cloud (TPC) universes.
+func requestUniverseDomain() (string, error) {
+	body, err := get(universeDomainURI, "")
+	if errors.Is(err, ErrNotFound) {
+		return DefaultUniverseDomain, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	domain := strings.TrimSpace(string(body))
+	if domain == "" {
+		return DefaultUniverseDomain, nil
+	}
+	return domain, nil
+}
+
 func isStatusSuccess(statusCode int) bool {
 	return statusCode >= http.StatusOK && statusCode <= 299
 }
@@ -345,4 +404,39 @@ func FetchGCEUpcomingMaintenance() (string, error) {
 		return "", err
 	}
 	return string(body), nil
+}
+
+// ConfigureUniverseDomainWithRetry determines the universe domain for the current process and
+// ensures it is exported via the GOOGLE_CLOUD_UNIVERSE_DOMAIN environment variable, which Google
+// Cloud client libraries use to construct API endpoints. Child processes inherit the variable.
+//
+// The universe domain is resolved in the following order:
+//  1. The GOOGLE_CLOUD_UNIVERSE_DOMAIN environment variable, if already set.
+//  2. The metadata server universe/universe-domain endpoint (published in TPC universes).
+//  3. DefaultUniverseDomain if the endpoint is not found (googleapis.com).
+//
+// The environment variable is only set when a non-default universe domain is detected, so the
+// behavior in the Google Default Universe is unchanged. Returns the resolved universe domain.
+func ConfigureUniverseDomainWithRetry(bo backoff.BackOff) string {
+	if domain := strings.TrimSpace(os.Getenv(UniverseDomainEnvVar)); domain != "" {
+		log.Logger.Debugw("Using universe domain from environment", "envVar", UniverseDomainEnvVar, "universeDomain", domain)
+		return domain
+	}
+	domain := UniverseDomainWithRetry(bo)
+	if domain == DefaultUniverseDomain {
+		log.Logger.Debugw("Using default universe domain", "universeDomain", domain)
+		return domain
+	}
+	if err := os.Setenv(UniverseDomainEnvVar, domain); err != nil {
+		log.Logger.Warnw("Could not set universe domain environment variable", "envVar", UniverseDomainEnvVar, "universeDomain", domain, log.Error(err))
+		return domain
+	}
+	log.Logger.Debugw("Detected universe domain from metadata server", "envVar", UniverseDomainEnvVar, "universeDomain", domain)
+	return domain
+}
+
+// ConfigureUniverseDomain configures the universe domain using a default backoff policy.
+func ConfigureUniverseDomain() string {
+	exp := backoff.NewExponentialBackOff()
+	return ConfigureUniverseDomainWithRetry(backoff.WithMaxRetries(exp, 1))
 }
