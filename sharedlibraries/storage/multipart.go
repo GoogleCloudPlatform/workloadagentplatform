@@ -32,12 +32,12 @@ import (
 	"google.golang.org/api/googleapi"
 	"golang.org/x/oauth2/google"
 	"golang.org/x/oauth2"
+	"github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries/gce/metadataserver"
 	"github.com/GoogleCloudPlatform/workloadagentplatform/sharedlibraries/log"
 )
 
 const (
-	defaultClientEndpoint = "storage.googleapis.com"
-	tokenScope            = "https://www.googleapis.com/auth/cloud-platform"
+	tokenScope = "https://www.googleapis.com/auth/cloud-platform"
 )
 
 var (
@@ -118,7 +118,7 @@ type uploadWorker struct {
 // NewMultipartWriter creates a writer and workers for a multipart upload.
 func (rw *ReadWriter) NewMultipartWriter(ctx context.Context, newClient HTTPClient, tokenGetter DefaultTokenGetter, jsonCredentialsGetter JSONCredentialsGetter) (*MultipartWriter, error) {
 	if rw.XMLMultipartEndpoint == "" {
-		rw.XMLMultipartEndpoint = defaultClientEndpoint
+		rw.XMLMultipartEndpoint = metadataserver.ServiceHost("storage")
 	}
 	baseURL := fmt.Sprintf("https://%s.%s/%s", rw.BucketName, rw.XMLMultipartEndpoint, rw.ObjectName)
 	token, err := token(ctx, rw.XMLMultipartServiceAccount, tokenGetter, jsonCredentialsGetter)

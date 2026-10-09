@@ -80,7 +80,7 @@ var (
 			fileType:               "FILE",
 			token:                  defaultToken,
 			httpClient:             newClient(time.Millisecond, defaultTransport()),
-			baseURL:                fmt.Sprintf("https://%s.%s/%s", defaultBucketName, defaultClientEndpoint, defaultObjectName),
+			baseURL:                fmt.Sprintf("https://%s.storage.googleapis.com/%s", defaultBucketName, defaultObjectName),
 			partSizeBytes:          DefaultChunkSizeMb,
 			partNum:                partNum,
 			maxRetries:             3,
@@ -381,6 +381,47 @@ func TestClose(t *testing.T) {
 			gotErr := test.w.Close()
 			if !cmp.Equal(gotErr, test.wantErr, cmpopts.EquateErrors()) {
 				t.Errorf("Close() = %v, want %v", gotErr, test.wantErr)
+			}
+		})
+	}
+}
+
+func TestNewMultipartWriterUniverseDomain(t *testing.T) {
+	tests := []struct {
+		name     string
+		env      string
+		endpoint string
+		wantURL  string
+	}{
+		{
+			name:    "defaultUniverse",
+			env:     "",
+			wantURL: fmt.Sprintf("https://%s.storage.googleapis.com/%s?uploads", defaultBucketName, defaultObjectName),
+		},
+		{
+			name:    "tpcUniverse",
+			env:     "apis-berlin-build0.goog",
+			wantURL: fmt.Sprintf("https://%s.storage.apis-berlin-build0.goog/%s?uploads", defaultBucketName, defaultObjectName),
+		},
+		{
+			name:     "configuredEndpointOverridesUniverse",
+			env:      "apis-berlin-build0.goog",
+			endpoint: "custom.endpoint.com",
+			wantURL:  fmt.Sprintf("https://%s.custom.endpoint.com/%s?uploads", defaultBucketName, defaultObjectName),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("GOOGLE_CLOUD_UNIVERSE_DOMAIN", test.env)
+			rw := defaultReadWriter
+			rw.XMLMultipartEndpoint = test.endpoint
+
+			got, err := rw.NewMultipartWriter(context.Background(), httpClientVerify(test.wantURL, nil), defaultTokenGetter, nil)
+			if err != nil {
+				t.Fatalf("NewMultipartWriter() returned unexpected error: %v", err)
+			}
+			if got.uploadID != fakeUploadID {
+				t.Errorf("NewMultipartWriter() uploadID = %q, want %q", got.uploadID, fakeUploadID)
 			}
 		})
 	}

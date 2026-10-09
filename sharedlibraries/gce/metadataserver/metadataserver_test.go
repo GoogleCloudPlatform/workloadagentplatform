@@ -730,3 +730,75 @@ func TestConfigureUniverseDomainWithRetry(t *testing.T) {
 		})
 	}
 }
+
+func TestUniverseHelpers(t *testing.T) {
+	tests := []struct {
+		name                 string
+		env                  string
+		wantDomain           string
+		wantStorageHost      string
+		wantComputeEndpoint  string
+		wantComputeResPrefix string
+	}{
+		{
+			name:                 "defaultUniverseWhenUnset",
+			env:                  "",
+			wantDomain:           "googleapis.com",
+			wantStorageHost:      "storage.googleapis.com",
+			wantComputeEndpoint:  "https://compute.googleapis.com",
+			wantComputeResPrefix: "https://www.googleapis.com/compute/v1/",
+		},
+		{
+			name:                 "explicitDefaultUniverse",
+			env:                  "googleapis.com",
+			wantDomain:           "googleapis.com",
+			wantStorageHost:      "storage.googleapis.com",
+			wantComputeEndpoint:  "https://compute.googleapis.com",
+			wantComputeResPrefix: "https://www.googleapis.com/compute/v1/",
+		},
+		{
+			name:                 "tpcUniverse",
+			env:                  "apis-berlin-build0.goog",
+			wantDomain:           "apis-berlin-build0.goog",
+			wantStorageHost:      "storage.apis-berlin-build0.goog",
+			wantComputeEndpoint:  "https://compute.apis-berlin-build0.goog",
+			wantComputeResPrefix: "https://compute.apis-berlin-build0.goog/compute/v1/",
+		},
+		{
+			name:                 "trimsWhitespace",
+			env:                  " s3nsapis.fr\n",
+			wantDomain:           "s3nsapis.fr",
+			wantStorageHost:      "storage.s3nsapis.fr",
+			wantComputeEndpoint:  "https://compute.s3nsapis.fr",
+			wantComputeResPrefix: "https://compute.s3nsapis.fr/compute/v1/",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv(UniverseDomainEnvVar, test.env)
+
+			if got := UniverseDomain(); got != test.wantDomain {
+				t.Errorf("UniverseDomain() = %q, want %q", got, test.wantDomain)
+			}
+			if got := ServiceHost("storage"); got != test.wantStorageHost {
+				t.Errorf("ServiceHost(%q) = %q, want %q", "storage", got, test.wantStorageHost)
+			}
+			if got := ServiceEndpoint("compute"); got != test.wantComputeEndpoint {
+				t.Errorf("ServiceEndpoint(%q) = %q, want %q", "compute", got, test.wantComputeEndpoint)
+			}
+			if got := ComputeResourcePrefix(); got != test.wantComputeResPrefix {
+				t.Errorf("ComputeResourcePrefix() = %q, want %q", got, test.wantComputeResPrefix)
+			}
+		})
+	}
+}
+
+func TestConfigureUniverseDomainUsesEnvVar(t *testing.T) {
+	// With the environment variable set, ConfigureUniverseDomain must not contact the metadata server.
+	t.Setenv(UniverseDomainEnvVar, "custom-universe.goog")
+	setMetadataServerURL(t, "http://127.0.0.1:0")
+
+	if got := ConfigureUniverseDomain(); got != "custom-universe.goog" {
+		t.Errorf("ConfigureUniverseDomain() = %q, want %q", got, "custom-universe.goog")
+	}
+}

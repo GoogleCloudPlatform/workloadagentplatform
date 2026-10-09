@@ -440,3 +440,41 @@ func ConfigureUniverseDomain() string {
 	exp := backoff.NewExponentialBackOff()
 	return ConfigureUniverseDomainWithRetry(backoff.WithMaxRetries(exp, 1))
 }
+
+// UniverseDomain returns the universe domain for the current process.
+//
+// It returns the value of the GOOGLE_CLOUD_UNIVERSE_DOMAIN environment variable if set, otherwise
+// DefaultUniverseDomain. It does not contact the metadata server; call ConfigureUniverseDomain at
+// process startup to detect the universe domain and export the environment variable.
+func UniverseDomain() string {
+	if domain := strings.TrimSpace(os.Getenv(UniverseDomainEnvVar)); domain != "" {
+		return domain
+	}
+	return DefaultUniverseDomain
+}
+
+// ServiceHost returns the API host name for a Google Cloud service in the current universe.
+//
+// For example, ServiceHost("storage") returns "storage.googleapis.com" in the Google Default
+// Universe and "storage.apis-berlin-build0.goog" in the TSP Trusted Partner Cloud universe.
+func ServiceHost(service string) string {
+	return fmt.Sprintf("%s.%s", service, UniverseDomain())
+}
+
+// ServiceEndpoint returns the HTTPS API endpoint (without a trailing slash) for a Google Cloud
+// service in the current universe, e.g. "https://compute.googleapis.com".
+func ServiceEndpoint(service string) string {
+	return "https://" + ServiceHost(service)
+}
+
+// ComputeResourcePrefix returns the prefix of fully qualified Compute Engine resource URLs (as
+// returned in selfLink fields) for the current universe, including the trailing slash.
+//
+// The Google Default Universe uses "https://www.googleapis.com/compute/v1/", while other universes
+// use the compute service endpoint, e.g. "https://compute.apis-berlin-build0.goog/compute/v1/".
+func ComputeResourcePrefix() string {
+	if domain := UniverseDomain(); domain != DefaultUniverseDomain {
+		return ServiceEndpoint("compute") + "/compute/v1/"
+	}
+	return "https://www.googleapis.com/compute/v1/"
+}
