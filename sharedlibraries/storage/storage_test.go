@@ -594,7 +594,8 @@ func TestListObjects(t *testing.T) {
 			if !cmp.Equal(gotError, test.wantError, cmpopts.EquateErrors()) {
 				t.Errorf("ListObjects(%s) = %v, want %v", test.prefix, gotError, test.wantError)
 			}
-			if diff := cmp.Diff(test.want, got, protocmp.Transform(), cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
+			// MediaLink differs between a GET and a LIST response in newer fakegcsserver versions.
+			if diff := cmp.Diff(test.want, got, protocmp.Transform(), cmpopts.SortSlices(func(a, b string) bool { return a < b }), cmpopts.IgnoreFields(storage.ObjectAttrs{}, "MediaLink")); diff != "" {
 				t.Errorf("ListObjects(%s) had unexpected diff (-want +got):\n%s", test.name, diff)
 			}
 		})
