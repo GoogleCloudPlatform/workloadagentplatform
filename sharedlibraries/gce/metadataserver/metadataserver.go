@@ -363,12 +363,14 @@ func parseZone(raw string) string {
 	return zone
 }
 
+// regionFromZone returns the region of a zone by removing the zone suffix, e.g.
+// "us-central1-a" -> "us-central1" and "u-germany-northeast1-a" -> "u-germany-northeast1".
 func regionFromZone(zone string) string {
 	regionParts := strings.Split(zone, "-")
 	if len(regionParts) < 2 {
 		return ""
 	}
-	return strings.Join(regionParts[:2], "-")
+	return strings.Join(regionParts[:max(2, len(regionParts)-1)], "-")
 }
 
 // parseMachineType retrieves the machine type from the response.

@@ -506,7 +506,12 @@ func TestRegionFromZone(t *testing.T) {
 		{
 			name: "us-central1-foo-bar",
 			zone: "us-central1-foo-bar",
-			want: "us-central1",
+			want: "us-central1-foo",
+		},
+		{
+			name: "TPCZone",
+			zone: "u-germany-northeast1-a",
+			want: "u-germany-northeast1",
 		},
 		{
 			name: "us-central1",
